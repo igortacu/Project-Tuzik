@@ -1,0 +1,9 @@
+pyyaml==6.0.2
+pytest==8.3.4
+
+# --- added in later phases, once each layer is implemented (do not install yet) ---
+# watchdog                # ingestion/watcher.py
+# sentence-transformers   # embedding/client.py
+# chromadb                # storage/vector_store.py
+# rank-bm25                # storage/bm25_index.py
+# python-dotenv            # config.py secret loading
