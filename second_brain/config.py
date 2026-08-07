@@ -2,6 +2,10 @@
 
 import os
 
+from dotenv import load_dotenv
+
+load_dotenv()
+
 # --- parsing / chunking ---
 CHARS_PER_TOKEN_APPROX = 4
 CHUNK_MAX_TOKENS = 300
@@ -21,8 +25,6 @@ OPENROUTER_MODEL_ID = "TBD"
 FALLBACK_MODEL_ID = "TBD"
 
 # --- environment-sourced secrets / machine-specific paths ---
-# python-dotenv + load_dotenv() is added here once generation/ is implemented;
-# until then these just read whatever is already in the shell environment.
 VAULT_PATH = os.environ.get("OBSIDIAN_VAULT_PATH")
 OPENROUTER_API_KEY = os.environ.get("OPENROUTER_API_KEY")
 PAID_MODEL_API_KEY = os.environ.get("PAID_MODEL_API_KEY")
