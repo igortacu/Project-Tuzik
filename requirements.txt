@@ -1,9 +1,10 @@
 pyyaml==6.0.2
 pytest==8.3.4
 
-# --- added in later phases, once each layer is implemented (do not install yet) ---
-# watchdog                # ingestion/watcher.py
-# sentence-transformers   # embedding/client.py
-# chromadb                # storage/vector_store.py
-# rank-bm25                # storage/bm25_index.py
-# python-dotenv            # config.py secret loading
+# --- phase 2: embedding / storage / retrieval / ingestion / generation ---
+watchdog>=4.0.0             # ingestion/watcher.py
+sentence-transformers>=3.0.0 # embedding/client.py
+chromadb>=0.5.0              # storage/vector_store.py
+rank-bm25>=0.2.2             # storage/bm25_index.py
+python-dotenv>=1.0.0         # config.py secret loading
+requests>=2.31.0             # generation/llm_client.py (OpenRouter/Ollama HTTP calls)
