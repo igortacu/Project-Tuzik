@@ -12,8 +12,10 @@ class VaultScanner:
     """
 
     def __init__(self, vault_path: Path) -> None:
-        raise NotImplementedError
+        self._vault_path = Path(vault_path)
 
     def scan(self) -> Iterator[tuple[Path, str]]:
         """Yield (path, raw_text) for every .md file under the vault root."""
-        raise NotImplementedError
+        for path in sorted(self._vault_path.rglob("*.md")):
+            if path.is_file():
+                yield path, path.read_text(encoding="utf-8")
