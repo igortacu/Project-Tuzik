@@ -4,6 +4,7 @@ on full rebuild. Shares no logic with query_pipeline.py beyond EmbeddingClient.
 
 from pathlib import Path
 
+from second_brain import config
 from second_brain.embedding.client import EmbeddingClient
 from second_brain.ingestion.scanner import VaultScanner
 from second_brain.parsing.chunker import chunk_note
@@ -39,6 +40,21 @@ def _get_bm25_index() -> BM25Index:
     return _bm25_index
 
 
+def _relative_source(path: Path) -> str:
+    """Vault-relative path used as the chunk/citation identity, e.g.
+    "career_sigmoid.md" instead of an absolute, machine-specific path --
+    keeps generated citations readable and eval expected_source values
+    portable across machines. Falls back to the absolute path if
+    config.VAULT_PATH isn't set or path isn't under it.
+    """
+    if config.VAULT_PATH:
+        try:
+            return str(Path(path).resolve().relative_to(Path(config.VAULT_PATH).resolve()))
+        except ValueError:
+            pass
+    return str(path)
+
+
 def index_file(path: Path, raw_text: str) -> None:
     """Index (or re-index) a single file.
 
@@ -46,7 +62,7 @@ def index_file(path: Path, raw_text: str) -> None:
     BM25Index before inserting the file's new chunks, or stale duplicate
     chunks persist and silently degrade retrieval.
     """
-    source_file = str(path)
+    source_file = _relative_source(path)
     vector_store = _get_vector_store()
     bm25_index = _get_bm25_index()
 
@@ -73,7 +89,7 @@ def index_file(path: Path, raw_text: str) -> None:
 
 def delete_file(path: Path) -> None:
     """Remove a deleted note's chunks from both stores."""
-    source_file = str(path)
+    source_file = _relative_source(path)
     _get_vector_store().delete_by_source(source_file)
     _get_bm25_index().delete_by_source(source_file)
 
