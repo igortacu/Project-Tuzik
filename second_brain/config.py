@@ -21,8 +21,9 @@ VECTOR_STORE_PATH = "data/chroma"
 BM25_INDEX_PATH = "data/bm25_chunks.json"
 
 # --- generation (consumed once generation/ is implemented) ---
-OPENROUTER_MODEL_ID = "TBD"
-FALLBACK_MODEL_ID = "TBD"
+OPENROUTER_MODEL_ID = "openai/gpt-oss-20b:free"
+FALLBACK_MODEL_ID = "openrouter/free"
+OLLAMA_MODEL_ID = "llama3.2"
 
 # --- environment-sourced secrets / machine-specific paths ---
 VAULT_PATH = os.environ.get("OBSIDIAN_VAULT_PATH")

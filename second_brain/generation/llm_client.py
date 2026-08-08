@@ -39,7 +39,7 @@ def _call_openrouter(model_id: str, api_key: str, prompt: str) -> str:
 def _call_ollama(prompt: str) -> str:
     response = requests.post(
         f"{config.OLLAMA_BASE_URL}/api/generate",
-        json={"model": config.FALLBACK_MODEL_ID, "prompt": prompt, "stream": False},
+        json={"model": config.OLLAMA_MODEL_ID, "prompt": prompt, "stream": False},
         timeout=_REQUEST_TIMEOUT_SECONDS,
     )
     response.raise_for_status()
@@ -97,7 +97,7 @@ class LLMClient:
             logger.info(
                 "llm request served by tier=%s model=%s",
                 ServingTier.OLLAMA_LOCAL.value,
-                config.FALLBACK_MODEL_ID,
+                config.OLLAMA_MODEL_ID,
             )
             return result
         except requests.RequestException as exc:
