@@ -50,6 +50,10 @@ def run_eval(top_k: int | None = None) -> EvalReport:
 
         if not question.expected_source or question.expected_source == _NEGATIVE_CONTROL:
             hit = None
+        elif isinstance(question.expected_source, list):
+            # Multi-note question: the answer genuinely requires pulling
+            # chunks from every listed note, not just one of them.
+            hit = all(src in retrieved_sources for src in question.expected_source)
         else:
             hit = question.expected_source in retrieved_sources
 
