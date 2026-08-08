@@ -10,6 +10,7 @@ import asyncio
 import logging
 import re
 
+import requests
 from telegram import Update
 from telegram.constants import ChatAction, ParseMode
 from telegram.error import BadRequest
@@ -106,8 +107,32 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
     await _reply_with_possible_sticker(update, answer)
 
 
+def _warn_if_model_unknown() -> None:
+    """Best-effort startup check: a typo'd/removed OPENROUTER_MODEL_ID (e.g.
+    a 404, not a 429) fails every single query with no fallback -- catch it
+    here so it's obvious at startup instead of buried in query error logs.
+    Never blocks startup: skips silently if the check itself fails.
+    """
+    try:
+        response = requests.get("https://openrouter.ai/api/v1/models", timeout=10)
+        response.raise_for_status()
+        known_ids = {m["id"] for m in response.json()["data"]}
+    except requests.RequestException:
+        return
+
+    if config.OPENROUTER_MODEL_ID not in known_ids:
+        logger.warning(
+            "config.OPENROUTER_MODEL_ID=%r was not found in OpenRouter's current "
+            "model list -- every query will fail until this is fixed. Check "
+            "https://openrouter.ai/models for a valid free-tier model id.",
+            config.OPENROUTER_MODEL_ID,
+        )
+
+
 def main() -> None:
     logging.basicConfig(level=logging.INFO)
+
+    _warn_if_model_unknown()
 
     if not config.TELEGRAM_BOT_TOKEN:
         raise SystemExit("TELEGRAM_BOT_TOKEN not set in .env")

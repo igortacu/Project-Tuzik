@@ -36,7 +36,7 @@ BM25_INDEX_PATH = "data/bm25_chunks.json"
 #   nvidia/nemotron-3-super-120b-a12b:free ~8.1s
 #   nvidia/nemotron-nano-9b-v2:free        ~14.4s
 #   openai/gpt-oss-20b:free                ~17.9s
-OPENROUTER_MODEL_ID = "google/gemma-4-31b-it:free"
+OPENROUTER_MODEL_ID = "inclusionai/ling-3.0-tiny:free"
 
 # --- personalization ---
 OWNER_NAME = "Igor"
