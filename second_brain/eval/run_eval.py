@@ -17,18 +17,26 @@ from second_brain.retrieval.retriever import Retriever
 from second_brain.storage.bm25_index import BM25Index
 from second_brain.storage.vector_store import VectorStore
 
+# Sentinel expected_source for negative-control questions ("should retrieve
+# nothing / low confidence"). Not scored: retrieval always returns top_k
+# results regardless of relevance (there's no confidence threshold anywhere
+# in the pipeline), so there's no automatic way to check "retrieved nothing".
+_NEGATIVE_CONTROL = "NONE"
+
 
 @dataclass
 class EvalResult:
     question: EvalQuestion
     retrieved_sources: list[str]
-    hit: bool
+    # None: negative control, or expected_source not filled in yet -- not
+    # scored, reported for manual review instead.
+    hit: bool | None
 
 
 @dataclass
 class EvalReport:
     results: list[EvalResult]
-    recall: float  # fraction of questions where expected_source was retrieved
+    recall: float  # fraction of *scored* questions where expected_source was retrieved
 
 
 def run_eval(top_k: int | None = None) -> EvalReport:
@@ -39,26 +47,29 @@ def run_eval(top_k: int | None = None) -> EvalReport:
     for question in QUESTIONS:
         chunks = retriever.retrieve(question.question, resolved_top_k)
         retrieved_sources = [chunk.metadata.get("source_file", "") for chunk in chunks]
-        results.append(
-            EvalResult(
-                question=question,
-                retrieved_sources=retrieved_sources,
-                hit=question.expected_source in retrieved_sources,
-            )
-        )
 
-    recall = sum(r.hit for r in results) / len(results) if results else 0.0
+        if not question.expected_source or question.expected_source == _NEGATIVE_CONTROL:
+            hit = None
+        else:
+            hit = question.expected_source in retrieved_sources
+
+        results.append(EvalResult(question=question, retrieved_sources=retrieved_sources, hit=hit))
+
+    scored = [r for r in results if r.hit is not None]
+    recall = sum(r.hit for r in scored) / len(scored) if scored else 0.0
     return EvalReport(results=results, recall=recall)
 
 
 if __name__ == "__main__":
     report = run_eval()
     for result in report.results:
-        status = "HIT " if result.hit else "MISS"
+        status = "SKIP" if result.hit is None else ("HIT " if result.hit else "MISS")
         print(
             f"[{status}] {result.question.question!r} "
             f"expected={result.question.expected_source!r} "
             f"retrieved={result.retrieved_sources}"
         )
-    hits = sum(r.hit for r in report.results)
-    print(f"\nRecall: {report.recall:.2%} ({hits}/{len(report.results)})")
+    scored = [r for r in report.results if r.hit is not None]
+    hits = sum(r.hit for r in scored)
+    skipped = len(report.results) - len(scored)
+    print(f"\nRecall: {report.recall:.2%} ({hits}/{len(scored)} scored, {skipped} skipped)")
