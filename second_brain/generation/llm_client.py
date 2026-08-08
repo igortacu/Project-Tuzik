@@ -1,4 +1,11 @@
-"""LLM generation with a tiered fallback chain."""
+"""LLM generation: two free-tier OpenRouter models, primary then fallback.
+
+No paid tier, no local model -- OpenRouter free tier only, by request. An
+earlier version also tried a "paid" tier and local Ollama, but the "paid"
+model id turned out to not be a real chat model (it returned garbage like a
+literal "User Safety: safe" instead of an answer) and Ollama was slower than
+the free API tier anyway on this hardware.
+"""
 
 import logging
 import re
@@ -25,20 +32,15 @@ def _strip_thinking(text: str) -> str:
 
 
 class ServingTier(Enum):
-    OPENROUTER_FREE = "openrouter_free"
-    PAID_FALLBACK = "paid_fallback"
-    OLLAMA_LOCAL = "ollama_local"
+    OPENROUTER_PRIMARY = "openrouter_primary"
+    OPENROUTER_FALLBACK = "openrouter_fallback"
 
 
 class AllTiersFailedError(RuntimeError):
-    """Raised when the OpenRouter free tier, the paid fallback, and the local
-    Ollama instance all failed to serve a request.
-    """
+    """Raised when both the primary and fallback OpenRouter free models failed."""
 
 
-def _call_openrouter(
-    model_id: str, api_key: str, prompt: str, system_prompt: str | None
-) -> str:
+def _call_openrouter(model_id: str, prompt: str, system_prompt: str | None) -> str:
     messages = []
     if system_prompt:
         messages.append({"role": "system", "content": system_prompt})
@@ -46,7 +48,7 @@ def _call_openrouter(
 
     response = requests.post(
         _OPENROUTER_URL,
-        headers={"Authorization": f"Bearer {api_key}"},
+        headers={"Authorization": f"Bearer {config.OPENROUTER_API_KEY}"},
         json={"model": model_id, "messages": messages},
         timeout=_REQUEST_TIMEOUT_SECONDS,
     )
@@ -54,75 +56,42 @@ def _call_openrouter(
     return _strip_thinking(response.json()["choices"][0]["message"]["content"])
 
 
-def _call_ollama(prompt: str, system_prompt: str | None) -> str:
-    payload = {"model": config.OLLAMA_MODEL_ID, "prompt": prompt, "stream": False}
-    if system_prompt:
-        payload["system"] = system_prompt
-
-    response = requests.post(
-        f"{config.OLLAMA_BASE_URL}/api/generate",
-        json=payload,
-        timeout=_REQUEST_TIMEOUT_SECONDS,
-    )
-    response.raise_for_status()
-    return _strip_thinking(response.json()["response"])
-
-
 class LLMClient:
-    """generate() tries the OpenRouter free-tier model first (model ID from
-    config, not hardcoded); on rate-limit/removal error, falls back to a
-    configured paid model, then to a local Ollama instance. Logs which tier
-    actually served each request.
+    """generate() tries the primary OpenRouter free-tier model
+    (config.OPENROUTER_MODEL_ID); on rate-limit/error, falls back to a second
+    free OpenRouter model (config.OPENROUTER_FALLBACK_MODEL_ID). Logs which
+    tier actually served each request.
     """
 
     def __init__(self) -> None:
         pass
 
     def generate(self, prompt: str, system_prompt: str | None = None) -> str:
-        if config.OPENROUTER_API_KEY:
-            try:
-                result = _call_openrouter(
-                    config.OPENROUTER_MODEL_ID, config.OPENROUTER_API_KEY, prompt, system_prompt
-                )
-                logger.info(
-                    "llm request served by tier=%s model=%s",
-                    ServingTier.OPENROUTER_FREE.value,
-                    config.OPENROUTER_MODEL_ID,
-                )
-                return result
-            except requests.RequestException as exc:
-                logger.warning(
-                    "OpenRouter free-tier model failed (%s), falling back to paid tier", exc
-                )
-
-        # Paid fallback also goes through OpenRouter's OpenAI-compatible API
-        # (same request shape), just with a different model id and API key --
-        # avoids a second bespoke provider integration for a still-simple
-        # config-driven fallback.
-        paid_api_key = config.PAID_MODEL_API_KEY or config.OPENROUTER_API_KEY
-        if paid_api_key:
-            try:
-                result = _call_openrouter(
-                    config.FALLBACK_MODEL_ID, paid_api_key, prompt, system_prompt
-                )
-                logger.info(
-                    "llm request served by tier=%s model=%s",
-                    ServingTier.PAID_FALLBACK.value,
-                    config.FALLBACK_MODEL_ID,
-                )
-                return result
-            except requests.RequestException as exc:
-                logger.warning(
-                    "Paid fallback model failed (%s), falling back to local Ollama", exc
-                )
+        if not config.OPENROUTER_API_KEY:
+            raise AllTiersFailedError("OPENROUTER_API_KEY not set in .env")
 
         try:
-            result = _call_ollama(prompt, system_prompt)
+            result = _call_openrouter(config.OPENROUTER_MODEL_ID, prompt, system_prompt)
             logger.info(
                 "llm request served by tier=%s model=%s",
-                ServingTier.OLLAMA_LOCAL.value,
-                config.OLLAMA_MODEL_ID,
+                ServingTier.OPENROUTER_PRIMARY.value,
+                config.OPENROUTER_MODEL_ID,
             )
             return result
         except requests.RequestException as exc:
-            raise AllTiersFailedError("All LLM serving tiers failed") from exc
+            logger.warning(
+                "Primary free model failed (%s), falling back to secondary free model", exc
+            )
+
+        try:
+            result = _call_openrouter(
+                config.OPENROUTER_FALLBACK_MODEL_ID, prompt, system_prompt
+            )
+            logger.info(
+                "llm request served by tier=%s model=%s",
+                ServingTier.OPENROUTER_FALLBACK.value,
+                config.OPENROUTER_FALLBACK_MODEL_ID,
+            )
+            return result
+        except requests.RequestException as exc:
+            raise AllTiersFailedError("Both OpenRouter free-tier models failed") from exc

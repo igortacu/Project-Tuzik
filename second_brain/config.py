@@ -21,16 +21,20 @@ VECTOR_STORE_PATH = "data/chroma"
 BM25_INDEX_PATH = "data/bm25_chunks.json"
 
 # --- generation (consumed once generation/ is implemented) ---
+# OpenRouter free tier only, two models deep, by request -- no paid tier, no
+# local model. ("openrouter/free" was tried as a "paid" fallback id earlier;
+# it isn't a real chat model and sometimes returned garbage like a literal
+# "User Safety: safe" instead of an answer. Local Ollama was also slower than
+# the free API tier on this hardware -- see llm_client.py's docstring.)
 # Benchmarked against several free-tier models on 2026-08-08 -- model size
 # didn't predict speed (some "nano"/9B models were slower than this one):
-#   inclusionai/ling-3.0-tiny:free        ~1.6-5.5s
-#   nvidia/nemotron-3-nano-30b-a3b:free   ~7.4s
-#   nvidia/nemotron-3-super-120b-a12b:free ~8.1s (previous default)
-#   nvidia/nemotron-nano-9b-v2:free       ~14.4s
-#   openai/gpt-oss-20b:free               ~17.9s
+#   inclusionai/ling-3.0-tiny:free         ~1.6-5.5s  (primary)
+#   nvidia/nemotron-3-nano-30b-a3b:free    ~7.4s      (fallback)
+#   nvidia/nemotron-3-super-120b-a12b:free ~8.1s
+#   nvidia/nemotron-nano-9b-v2:free        ~14.4s
+#   openai/gpt-oss-20b:free                ~17.9s
 OPENROUTER_MODEL_ID = "inclusionai/ling-3.0-tiny:free"
-FALLBACK_MODEL_ID = "openrouter/free"
-OLLAMA_MODEL_ID = "qwen2.5:14b-instruct-q4_K_M"  # must match a model already pulled locally
+OPENROUTER_FALLBACK_MODEL_ID = "nvidia/nemotron-3-nano-30b-a3b:free"
 
 # --- personalization ---
 OWNER_NAME = "Igor"
@@ -69,8 +73,6 @@ SYSTEM_PROMPT = (
 # --- environment-sourced secrets / machine-specific paths ---
 VAULT_PATH = os.environ.get("OBSIDIAN_VAULT_PATH")
 OPENROUTER_API_KEY = os.environ.get("OPENROUTER_API_KEY")
-PAID_MODEL_API_KEY = os.environ.get("PAID_MODEL_API_KEY")
-OLLAMA_BASE_URL = os.environ.get("OLLAMA_BASE_URL")
 TELEGRAM_BOT_TOKEN = os.environ.get("TELEGRAM_BOT_TOKEN")
 
 # Comma-separated Telegram user ids allowed to query the bot, e.g. "12345678".
