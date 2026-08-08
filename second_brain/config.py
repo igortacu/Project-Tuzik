@@ -45,6 +45,10 @@ ASSISTANT_NAME = "Murzik"
 # Shown instead of an error when OpenRouter rate-limits us (429) -- an
 # expected, recoverable condition, not a bug.
 RATE_LIMIT_MESSAGE = "ia asteapta oleac, stai c ma gandesc"
+
+# Shown instead of RATE_LIMIT_MESSAGE if the *next* request also 429s right
+# after that warning -- i.e. the user didn't wait.
+REPEATED_RATE_LIMIT_MESSAGE = "bai bulau, eu tie ti-am spus sa astepti, huli tu nu asculti? esti daun?"
 SYSTEM_PROMPT = (
     f"You are {ASSISTANT_NAME}, {OWNER_NAME}'s personal AI assistant -- his only one, "
     "built specifically to answer questions using his own notes (his \"second brain\" "

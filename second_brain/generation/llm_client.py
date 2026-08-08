@@ -57,12 +57,14 @@ class LLMClient:
     (config.OPENROUTER_MODEL_ID). On a 429 (rate limit), returns
     config.RATE_LIMIT_MESSAGE instead of raising -- rate limiting is an
     expected, recoverable condition, not a bug, so it gets an in-character
-    reply rather than a generic error. Any other failure raises
-    GenerationFailedError.
+    reply rather than a generic error. If the *next* request also 429s right
+    after that warning (the user didn't wait), it escalates to
+    config.REPEATED_RATE_LIMIT_MESSAGE instead. A successful request resets
+    the streak. Any other failure raises GenerationFailedError.
     """
 
     def __init__(self) -> None:
-        pass
+        self._consecutive_rate_limits = 0
 
     def generate(self, prompt: str, system_prompt: str | None = None) -> str:
         if not config.OPENROUTER_API_KEY:
@@ -70,10 +72,15 @@ class LLMClient:
 
         try:
             result = _call_openrouter(prompt, system_prompt)
+            self._consecutive_rate_limits = 0
             logger.info("llm request served by model=%s", config.OPENROUTER_MODEL_ID)
             return result
         except requests.HTTPError as exc:
             if exc.response is not None and exc.response.status_code == _RATE_LIMIT_STATUS_CODE:
+                self._consecutive_rate_limits += 1
+                if self._consecutive_rate_limits >= 2:
+                    logger.warning("OpenRouter rate-limited again (429) -- escalating reply")
+                    return config.REPEATED_RATE_LIMIT_MESSAGE
                 logger.warning("OpenRouter rate-limited (429), returning stock reply")
                 return config.RATE_LIMIT_MESSAGE
             raise GenerationFailedError(f"OpenRouter request failed: {exc}") from exc
