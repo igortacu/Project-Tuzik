@@ -25,21 +25,32 @@ class AllTiersFailedError(RuntimeError):
     """
 
 
-def _call_openrouter(model_id: str, api_key: str, prompt: str) -> str:
+def _call_openrouter(
+    model_id: str, api_key: str, prompt: str, system_prompt: str | None
+) -> str:
+    messages = []
+    if system_prompt:
+        messages.append({"role": "system", "content": system_prompt})
+    messages.append({"role": "user", "content": prompt})
+
     response = requests.post(
         _OPENROUTER_URL,
         headers={"Authorization": f"Bearer {api_key}"},
-        json={"model": model_id, "messages": [{"role": "user", "content": prompt}]},
+        json={"model": model_id, "messages": messages},
         timeout=_REQUEST_TIMEOUT_SECONDS,
     )
     response.raise_for_status()
     return response.json()["choices"][0]["message"]["content"]
 
 
-def _call_ollama(prompt: str) -> str:
+def _call_ollama(prompt: str, system_prompt: str | None) -> str:
+    payload = {"model": config.OLLAMA_MODEL_ID, "prompt": prompt, "stream": False}
+    if system_prompt:
+        payload["system"] = system_prompt
+
     response = requests.post(
         f"{config.OLLAMA_BASE_URL}/api/generate",
-        json={"model": config.OLLAMA_MODEL_ID, "prompt": prompt, "stream": False},
+        json=payload,
         timeout=_REQUEST_TIMEOUT_SECONDS,
     )
     response.raise_for_status()
@@ -56,11 +67,11 @@ class LLMClient:
     def __init__(self) -> None:
         pass
 
-    def generate(self, prompt: str) -> str:
+    def generate(self, prompt: str, system_prompt: str | None = None) -> str:
         if config.OPENROUTER_API_KEY:
             try:
                 result = _call_openrouter(
-                    config.OPENROUTER_MODEL_ID, config.OPENROUTER_API_KEY, prompt
+                    config.OPENROUTER_MODEL_ID, config.OPENROUTER_API_KEY, prompt, system_prompt
                 )
                 logger.info(
                     "llm request served by tier=%s model=%s",
@@ -80,7 +91,9 @@ class LLMClient:
         paid_api_key = config.PAID_MODEL_API_KEY or config.OPENROUTER_API_KEY
         if paid_api_key:
             try:
-                result = _call_openrouter(config.FALLBACK_MODEL_ID, paid_api_key, prompt)
+                result = _call_openrouter(
+                    config.FALLBACK_MODEL_ID, paid_api_key, prompt, system_prompt
+                )
                 logger.info(
                     "llm request served by tier=%s model=%s",
                     ServingTier.PAID_FALLBACK.value,
@@ -93,7 +106,7 @@ class LLMClient:
                 )
 
         try:
-            result = _call_ollama(prompt)
+            result = _call_ollama(prompt, system_prompt)
             logger.info(
                 "llm request served by tier=%s model=%s",
                 ServingTier.OLLAMA_LOCAL.value,

@@ -1,12 +1,11 @@
-"""Formats retrieved chunks into a context block for the LLM prompt."""
+"""Formats retrieved chunks into a context block for the LLM prompt.
+
+Persona, tone, and citation/formatting rules live in config.SYSTEM_PROMPT
+(sent as the system-role message) -- this module only builds the user-role
+turn: retrieved context plus the question.
+"""
 
 from second_brain.retrieval.retriever import RetrievedChunk
-
-_INSTRUCTIONS = (
-    "You are answering a question using the notes below. Cite the source "
-    "filename for any claim you make. If the notes don't contain the "
-    "answer, say so."
-)
 
 
 def build_prompt(query: str, chunks: list[RetrievedChunk]) -> str:
@@ -24,4 +23,4 @@ def build_prompt(query: str, chunks: list[RetrievedChunk]) -> str:
             sections.append(f"{header}\n{chunk.text}")
         context_block = "\n\n---\n\n".join(sections)
 
-    return f"{_INSTRUCTIONS}\n\nContext:\n{context_block}\n\nQuestion: {query}\nAnswer:"
+    return f"Context:\n{context_block}\n\nQuestion: {query}\nAnswer:"

@@ -42,4 +42,4 @@ def answer_query(
     resolved_top_k = top_k if top_k is not None else config.TOP_K
     chunks = _get_retriever().retrieve(query, resolved_top_k, filters)
     prompt = build_prompt(query, chunks)
-    return _get_llm_client().generate(prompt)
+    return _get_llm_client().generate(prompt, system_prompt=config.SYSTEM_PROMPT)
