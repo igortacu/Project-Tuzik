@@ -21,7 +21,7 @@ VECTOR_STORE_PATH = "data/chroma"
 BM25_INDEX_PATH = "data/bm25_chunks.json"
 
 # --- generation (consumed once generation/ is implemented) ---
-OPENROUTER_MODEL_ID = "openai/gpt-oss-20b:free"
+OPENROUTER_MODEL_ID = "nvidia/nemotron-3-super-120b-a12b:free"
 FALLBACK_MODEL_ID = "openrouter/free"
 OLLAMA_MODEL_ID = "llama3.2"
 
@@ -30,3 +30,11 @@ VAULT_PATH = os.environ.get("OBSIDIAN_VAULT_PATH")
 OPENROUTER_API_KEY = os.environ.get("OPENROUTER_API_KEY")
 PAID_MODEL_API_KEY = os.environ.get("PAID_MODEL_API_KEY")
 OLLAMA_BASE_URL = os.environ.get("OLLAMA_BASE_URL")
+TELEGRAM_BOT_TOKEN = os.environ.get("TELEGRAM_BOT_TOKEN")
+
+# Comma-separated Telegram user ids allowed to query the bot, e.g. "12345678".
+# Empty/unset means nobody is authorized yet -- the bot tells any sender
+# their own id so the owner can copy it in on first contact.
+TELEGRAM_ALLOWED_USER_IDS = {
+    int(uid) for uid in os.environ.get("TELEGRAM_ALLOWED_USER_IDS", "").split(",") if uid.strip()
+}

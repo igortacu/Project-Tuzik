@@ -29,6 +29,13 @@ def _cmd_query(args: argparse.Namespace) -> int:
     return 0
 
 
+def _cmd_telegram(args: argparse.Namespace) -> int:
+    from second_brain.bot import telegram_bot  # lazy: keep index/query usable without this dep
+
+    telegram_bot.main()
+    return 0
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="second_brain", description="Local RAG pipeline over an Obsidian vault."
@@ -47,6 +54,11 @@ def build_parser() -> argparse.ArgumentParser:
     query_parser.add_argument("question", help="The question to ask.")
     query_parser.add_argument("--top-k", type=int, default=None, help="Override config.TOP_K")
     query_parser.set_defaults(func=_cmd_query)
+
+    telegram_parser = subparsers.add_parser(
+        "telegram", help="Start the Telegram bot (long-polling, blocks until killed)."
+    )
+    telegram_parser.set_defaults(func=_cmd_telegram)
 
     return parser
 
