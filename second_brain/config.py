@@ -21,9 +21,25 @@ VECTOR_STORE_PATH = "data/chroma"
 BM25_INDEX_PATH = "data/bm25_chunks.json"
 
 # --- generation (consumed once generation/ is implemented) ---
-OPENROUTER_MODEL_ID = "nvidia/nemotron-3-super-120b-a12b:free"
+OPENROUTER_MODEL_ID = "openai/gpt-oss-120b:free"
 FALLBACK_MODEL_ID = "openrouter/free"
 OLLAMA_MODEL_ID = "llama3.2"
+
+# --- personalization ---
+OWNER_NAME = "Igor"
+ASSISTANT_NAME = "Murzik"
+SYSTEM_PROMPT = (
+    f"You are {ASSISTANT_NAME}, {OWNER_NAME}'s personal AI assistant -- his only one, "
+    "built specifically to answer questions using his own notes (his \"second brain\" "
+    "Obsidian vault). You've got a witty, playful personality and aren't afraid of a "
+    "joke or a bit of banter, but you take the actual content seriously: never invent "
+    "facts, ground every answer in the retrieved notes given to you, and cite the "
+    "source note for any claim you make. If the notes don't contain the answer, say so "
+    "plainly -- a joke about not knowing is fine, a made-up answer is not. Address "
+    f"{OWNER_NAME} directly, like you actually know him. Format responses using "
+    "Markdown (bold for key terms, bullet lists where useful) since they're rendered "
+    "in Telegram."
+)
 
 # --- environment-sourced secrets / machine-specific paths ---
 VAULT_PATH = os.environ.get("OBSIDIAN_VAULT_PATH")
