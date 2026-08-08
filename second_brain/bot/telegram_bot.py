@@ -10,8 +10,9 @@ import asyncio
 import logging
 
 from telegram import Update
-from telegram.constants import ChatAction
-from telegram.ext import Application, ContextTypes, MessageHandler, filters
+from telegram.constants import ChatAction, ParseMode
+from telegram.error import BadRequest
+from telegram.ext import Application, CommandHandler, ContextTypes, MessageHandler, filters
 
 from second_brain import config
 from second_brain.pipelines import query_pipeline
@@ -20,6 +21,11 @@ logger = logging.getLogger(__name__)
 
 _MAX_MESSAGE_LENGTH = 4000  # Telegram's hard cap is 4096; leave some margin
 
+_START_MESSAGE = (
+    f"Hey, I'm *{config.ASSISTANT_NAME}* — {config.OWNER_NAME}'s personal second brain "
+    "on legs. Ask me anything about your notes and I'll dig it up (with receipts)."
+)
+
 
 def _is_authorized(user_id: int) -> bool:
     return user_id in config.TELEGRAM_ALLOWED_USER_IDS
@@ -27,7 +33,18 @@ def _is_authorized(user_id: int) -> bool:
 
 async def _reply_in_chunks(update: Update, text: str) -> None:
     for start in range(0, len(text), _MAX_MESSAGE_LENGTH):
-        await update.message.reply_text(text[start : start + _MAX_MESSAGE_LENGTH])
+        chunk = text[start : start + _MAX_MESSAGE_LENGTH]
+        try:
+            await update.message.reply_text(chunk, parse_mode=ParseMode.MARKDOWN)
+        except BadRequest:
+            # The model's Markdown wasn't valid Telegram Markdown (unmatched
+            # * or _, etc.) -- fall back to plain text rather than dropping
+            # the answer.
+            await update.message.reply_text(chunk)
+
+
+async def handle_start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    await update.message.reply_text(_START_MESSAGE, parse_mode=ParseMode.MARKDOWN)
 
 
 async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -65,6 +82,7 @@ def main() -> None:
         )
 
     app = Application.builder().token(config.TELEGRAM_BOT_TOKEN).build()
+    app.add_handler(CommandHandler("start", handle_start))
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
 
     logger.info("Starting Telegram bot (long-polling)...")
