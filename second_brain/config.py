@@ -30,22 +30,23 @@ BM25_INDEX_PATH = "data/bm25_chunks.json"
 MURZIK_NOTES_DIR = "Murzik Notes"
 
 # --- generation (consumed once generation/ is implemented) ---
-# Single OpenRouter free-tier model, by request -- no fallback model, no paid
-# tier, no local model. A two-model fallback was tried first, but OpenRouter
-# rate limiting turned out to hit the whole account, not just one model, so
-# the fallback attempt usually 429'd too -- it just added latency before
-# failing anyway. ("openrouter/free" was also tried earlier as a "paid"
-# fallback id; it isn't a real chat model and sometimes returned garbage like
-# a literal "User Safety: safe" instead of an answer. Local Ollama was slower
-# than the free API tier on this hardware too.)
-# Benchmarked against several free-tier models on 2026-08-08 -- model size
-# didn't predict speed (some "nano"/9B models were slower than this one):
-#   inclusionai/ling-3.0-tiny:free         ~1.6-5.5s
-#   nvidia/nemotron-3-nano-30b-a3b:free    ~7.4s
-#   nvidia/nemotron-3-super-120b-a12b:free ~8.1s
-#   nvidia/nemotron-nano-9b-v2:free        ~14.4s
-#   openai/gpt-oss-20b:free                ~17.9s
-OPENROUTER_MODEL_ID = "deepseek/deepseek-v4-pro"  # paid -- consumes OpenRouter credits per query
+# Single OpenRouter model, no fallback model, no local model. A two-model
+# fallback was tried first, but OpenRouter rate limiting turned out to hit
+# the whole account, not just one model, so the fallback attempt usually
+# 429'd too -- it just added latency before failing anyway. Local Ollama was
+# also slower than the API on this hardware.
+#
+# Paid, not free tier -- consumes OpenRouter credits per query. Switched from
+# deepseek/deepseek-v4-pro (a reasoning model, ~8.7s/query on its default
+# "high" reasoning effort) after benchmarking latency on 2026-08-09:
+#   anthropic/claude-haiku-4.5   ~2.6s  ($1.00/$5.00 per M prompt/completion)
+#   deepseek/deepseek-v4-flash   ~4.0s  ($0.14/$0.28 per M -- cheapest, same family as v4-pro)
+#   deepseek-v4-pro (reasoning disabled) ~5.3s
+#   google/gemini-3.5-flash      ~5.2s  ($1.50/$9.00 per M)
+#   openai/gpt-5-mini            ~7.3s  ($0.25/$2.00 per M)
+# Picked deepseek-v4-flash: ~2x faster than v4-pro, same model family
+# (consistent behavior), and the cheapest option benchmarked.
+OPENROUTER_MODEL_ID = "deepseek/deepseek-v4-flash"
 
 # --- personalization ---
 OWNER_NAME = "Igor"
