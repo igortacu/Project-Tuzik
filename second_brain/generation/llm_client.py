@@ -1,6 +1,7 @@
 """LLM generation with a tiered fallback chain."""
 
 import logging
+import re
 from enum import Enum
 
 import requests
@@ -11,6 +12,16 @@ logger = logging.getLogger(__name__)
 
 _OPENROUTER_URL = "https://openrouter.ai/api/v1/chat/completions"
 _REQUEST_TIMEOUT_SECONDS = 30
+
+# Some free-tier models emit a visible reasoning/thinking block inline in the
+# response content (rather than a separate API field) even when told not to.
+# Strip it as a safety net -- the system prompt asks the model not to do this
+# in the first place, but this covers the cases where it doesn't listen.
+_THINKING_BLOCK_RE = re.compile(r"<(think|thinking|reasoning)>.*?</\1>", re.DOTALL | re.IGNORECASE)
+
+
+def _strip_thinking(text: str) -> str:
+    return _THINKING_BLOCK_RE.sub("", text).strip()
 
 
 class ServingTier(Enum):
@@ -40,7 +51,7 @@ def _call_openrouter(
         timeout=_REQUEST_TIMEOUT_SECONDS,
     )
     response.raise_for_status()
-    return response.json()["choices"][0]["message"]["content"]
+    return _strip_thinking(response.json()["choices"][0]["message"]["content"])
 
 
 def _call_ollama(prompt: str, system_prompt: str | None) -> str:
@@ -54,7 +65,7 @@ def _call_ollama(prompt: str, system_prompt: str | None) -> str:
         timeout=_REQUEST_TIMEOUT_SECONDS,
     )
     response.raise_for_status()
-    return response.json()["response"]
+    return _strip_thinking(response.json()["response"])
 
 
 class LLMClient:
