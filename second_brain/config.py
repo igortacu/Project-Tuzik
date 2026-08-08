@@ -20,6 +20,12 @@ EMBEDDING_MODEL_NAME = "all-MiniLM-L6-v2"
 VECTOR_STORE_PATH = "data/chroma"
 BM25_INDEX_PATH = "data/bm25_chunks.json"
 
+# --- agent write access ---
+# Murzik may only create/append files under this vault subfolder -- never
+# anywhere else, and there is no delete capability anywhere in the codebase
+# for it to (mis)use. See second_brain/agent/vault_writer.py.
+MURZIK_NOTES_DIR = "Murzik Notes"
+
 # --- generation (consumed once generation/ is implemented) ---
 # Single OpenRouter free-tier model, by request -- no fallback model, no paid
 # tier, no local model. A two-model fallback was tried first, but OpenRouter
