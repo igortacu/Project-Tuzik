@@ -36,10 +36,16 @@ class GenerationFailedError(RuntimeError):
     """
 
 
-def _call_openrouter(prompt: str, system_prompt: str | None) -> str:
+def _call_openrouter(
+    prompt: str,
+    system_prompt: str | None,
+    history: list[tuple[str, str]] | None = None,
+) -> str:
     messages = []
     if system_prompt:
         messages.append({"role": "system", "content": system_prompt})
+    for role, content in history or ():
+        messages.append({"role": role, "content": content})
     messages.append({"role": "user", "content": prompt})
 
     response = requests.post(
@@ -49,12 +55,23 @@ def _call_openrouter(prompt: str, system_prompt: str | None) -> str:
         timeout=_REQUEST_TIMEOUT_SECONDS,
     )
     response.raise_for_status()
-    return _strip_thinking(response.json()["choices"][0]["message"]["content"])
+    content = response.json()["choices"][0]["message"]["content"]
+    if not isinstance(content, str):
+        # Seen in practice with the paid model: a 200 response whose content
+        # is None instead of a string (no error, no explanation from the
+        # API). Surface it as a clear failure instead of crashing on
+        # .strip()/.sub() deeper in the call stack.
+        raise GenerationFailedError(f"OpenRouter returned non-string content: {content!r}")
+    return _strip_thinking(content)
 
 
 class LLMClient:
     """generate() calls the single configured OpenRouter model
-    (config.OPENROUTER_MODEL_ID). On a 429 (rate limit), returns
+    (config.OPENROUTER_MODEL_ID). Accepts optional prior-turn history as
+    [(role, content), ...] (role is "user" or "assistant"), inserted between
+    the system message and the current prompt -- see bot/memory.py, which
+    owns the actual per-chat history state; this class stays stateless
+    across calls. On a 429 (rate limit), returns
     config.RATE_LIMIT_MESSAGE instead of raising -- rate limiting is an
     expected, recoverable condition, not a bug, so it gets an in-character
     reply rather than a generic error. If the *next* request also 429s right
@@ -66,12 +83,17 @@ class LLMClient:
     def __init__(self) -> None:
         self._consecutive_rate_limits = 0
 
-    def generate(self, prompt: str, system_prompt: str | None = None) -> str:
+    def generate(
+        self,
+        prompt: str,
+        system_prompt: str | None = None,
+        history: list[tuple[str, str]] | None = None,
+    ) -> str:
         if not config.OPENROUTER_API_KEY:
             raise GenerationFailedError("OPENROUTER_API_KEY not set in .env")
 
         try:
-            result = _call_openrouter(prompt, system_prompt)
+            result = _call_openrouter(prompt, system_prompt, history)
             self._consecutive_rate_limits = 0
             logger.info("llm request served by model=%s", config.OPENROUTER_MODEL_ID)
             return result
@@ -86,3 +108,8 @@ class LLMClient:
             raise GenerationFailedError(f"OpenRouter request failed: {exc}") from exc
         except requests.RequestException as exc:
             raise GenerationFailedError(f"OpenRouter request failed: {exc}") from exc
+        except (KeyError, IndexError) as exc:
+            # Malformed/unexpected response shape (missing "choices", empty
+            # list, etc.) -- same defensive intent as the non-string content
+            # check in _call_openrouter, just for structure instead of type.
+            raise GenerationFailedError(f"OpenRouter returned an unexpected response shape: {exc}") from exc

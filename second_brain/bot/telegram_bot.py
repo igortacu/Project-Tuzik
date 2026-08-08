@@ -17,6 +17,7 @@ from telegram.error import BadRequest
 from telegram.ext import Application, CommandHandler, ContextTypes, MessageHandler, filters
 
 from second_brain import config
+from second_brain.bot.memory import ConversationMemory
 from second_brain.pipelines import query_pipeline
 
 logger = logging.getLogger(__name__)
@@ -26,6 +27,9 @@ _MAX_MESSAGE_LENGTH = 4000  # Telegram's hard cap is 4096; leave some margin
 # Matches the marker the model can put in its reply to trigger a sticker --
 # see config.STICKERS and config.SYSTEM_PROMPT.
 _STICKER_MARKER_RE = re.compile(r"\[\[sticker:(\w+)\]\]")
+
+# In-process only, per chat -- cleared on restart. See bot/memory.py.
+_memory = ConversationMemory(config.CONVERSATION_HISTORY_TURNS)
 
 _START_MESSAGE = (
     f"Hey, I'm *{config.ASSISTANT_NAME}* — {config.OWNER_NAME}'s personal second brain "
@@ -63,25 +67,29 @@ async def _reply_in_chunks(update: Update, text: str) -> None:
             await update.message.reply_text(chunk)
 
 
-async def _reply_with_possible_sticker(update: Update, text: str) -> None:
-    """Sends text (if any remains) and/or a sticker, based on whether the
-    model's reply included a [[sticker:CATEGORY]] marker.
+def _strip_sticker_marker(text: str) -> tuple[str, str | None]:
+    """Splits a raw model reply into (visible_text, sticker_category).
+    sticker_category is None if the reply had no [[sticker:CATEGORY]] marker.
     """
     match = _STICKER_MARKER_RE.search(text)
     remaining_text = re.sub(r"[ \t]{2,}", " ", _STICKER_MARKER_RE.sub("", text)).strip()
+    return remaining_text, (match.group(1) if match else None)
 
+
+async def _reply_with_possible_sticker(
+    update: Update, remaining_text: str, sticker_category: str | None
+) -> None:
     if remaining_text:
         await _reply_in_chunks(update, remaining_text)
 
-    if not match:
+    if sticker_category is None:
         return
 
-    category = match.group(1)
-    file_id = config.STICKERS.get(category)
+    file_id = config.STICKERS.get(sticker_category)
     if file_id:
         await update.message.reply_sticker(file_id)
     else:
-        logger.warning("Model requested unknown sticker category: %r", category)
+        logger.warning("Model requested unknown sticker category: %r", sticker_category)
 
 
 async def handle_start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -95,16 +103,21 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
         return
 
     question = update.message.text
+    chat_id = update.effective_chat.id
     await update.message.chat.send_action(ChatAction.TYPING)
 
     try:
-        answer = await asyncio.to_thread(query_pipeline.answer_query, question)
+        answer = await asyncio.to_thread(
+            query_pipeline.answer_query, question, history=_memory.get(chat_id)
+        )
     except Exception:
         logger.exception("answer_query failed for question: %r", question)
         await update.message.reply_text("Something went wrong answering that -- check the logs.")
         return
 
-    await _reply_with_possible_sticker(update, answer)
+    remaining_text, sticker_category = _strip_sticker_marker(answer)
+    await _reply_with_possible_sticker(update, remaining_text, sticker_category)
+    _memory.append(chat_id, question, remaining_text or answer)
 
 
 def _warn_if_model_unknown() -> None:

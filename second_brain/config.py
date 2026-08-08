@@ -15,6 +15,9 @@ CHUNK_HEADING_MAX_LEVEL = 3  # H1-H3 are chunk boundaries; H4-H6 stay inline
 TOP_K = 5
 RRF_K = 60
 
+# --- conversation memory (in-process, per Telegram chat, cleared on restart) ---
+CONVERSATION_HISTORY_TURNS = 6
+
 # --- embedding / storage (consumed once embedding/ and storage/ are implemented) ---
 EMBEDDING_MODEL_NAME = "all-MiniLM-L6-v2"
 VECTOR_STORE_PATH = "data/chroma"

@@ -59,18 +59,23 @@ def answer_query(
     query: str,
     top_k: int | None = None,
     filters: dict[str, Any] | None = None,
+    history: list[tuple[str, str]] | None = None,
 ) -> str:
     """Retrieve relevant chunks, build a prompt, and generate an answer.
 
     Skips retrieval entirely for small-talk-shaped messages -- see
-    _is_small_talk.
+    _is_small_talk. history is optional prior-turn context (see
+    bot/memory.py) -- this function stays stateless itself, the caller owns
+    conversation state and passes it in.
     """
     if _is_small_talk(query):
         return _get_llm_client().generate(
-            f"Message: {query}\nReply:", system_prompt=config.SYSTEM_PROMPT
+            f"Message: {query}\nReply:",
+            system_prompt=config.SYSTEM_PROMPT,
+            history=history,
         )
 
     resolved_top_k = top_k if top_k is not None else config.TOP_K
     chunks = _get_retriever().retrieve(query, resolved_top_k, filters)
     prompt = build_prompt(query, chunks)
-    return _get_llm_client().generate(prompt, system_prompt=config.SYSTEM_PROMPT)
+    return _get_llm_client().generate(prompt, system_prompt=config.SYSTEM_PROMPT, history=history)
