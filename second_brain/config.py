@@ -21,9 +21,16 @@ VECTOR_STORE_PATH = "data/chroma"
 BM25_INDEX_PATH = "data/bm25_chunks.json"
 
 # --- generation (consumed once generation/ is implemented) ---
-OPENROUTER_MODEL_ID = "openai/gpt-oss-120b:free"
+# Benchmarked against several free-tier models on 2026-08-08 -- model size
+# didn't predict speed (some "nano"/9B models were slower than this one):
+#   inclusionai/ling-3.0-tiny:free        ~1.6-5.5s
+#   nvidia/nemotron-3-nano-30b-a3b:free   ~7.4s
+#   nvidia/nemotron-3-super-120b-a12b:free ~8.1s (previous default)
+#   nvidia/nemotron-nano-9b-v2:free       ~14.4s
+#   openai/gpt-oss-20b:free               ~17.9s
+OPENROUTER_MODEL_ID = "inclusionai/ling-3.0-tiny:free"
 FALLBACK_MODEL_ID = "openrouter/free"
-OLLAMA_MODEL_ID = "llama3.2"
+OLLAMA_MODEL_ID = "qwen2.5:14b-instruct-q4_K_M"  # must match a model already pulled locally
 
 # --- personalization ---
 OWNER_NAME = "Igor"
