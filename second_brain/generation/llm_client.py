@@ -1,15 +1,13 @@
-"""LLM generation: two free-tier OpenRouter models, primary then fallback.
+"""LLM generation via a single OpenRouter free-tier model.
 
-No paid tier, no local model -- OpenRouter free tier only, by request. An
-earlier version also tried a "paid" tier and local Ollama, but the "paid"
-model id turned out to not be a real chat model (it returned garbage like a
-literal "User Safety: safe" instead of an answer) and Ollama was slower than
-the free API tier anyway on this hardware.
+No fallback model, no paid tier, no local model, by request -- rate
+limiting turned out to hit the whole OpenRouter account, not just one
+model, so trying a second model on 429 didn't actually help, just added
+complexity and latency.
 """
 
 import logging
 import re
-from enum import Enum
 
 import requests
 
@@ -19,6 +17,7 @@ logger = logging.getLogger(__name__)
 
 _OPENROUTER_URL = "https://openrouter.ai/api/v1/chat/completions"
 _REQUEST_TIMEOUT_SECONDS = 30
+_RATE_LIMIT_STATUS_CODE = 429
 
 # Some free-tier models emit a visible reasoning/thinking block inline in the
 # response content (rather than a separate API field) even when told not to.
@@ -31,16 +30,13 @@ def _strip_thinking(text: str) -> str:
     return _THINKING_BLOCK_RE.sub("", text).strip()
 
 
-class ServingTier(Enum):
-    OPENROUTER_PRIMARY = "openrouter_primary"
-    OPENROUTER_FALLBACK = "openrouter_fallback"
+class GenerationFailedError(RuntimeError):
+    """Raised when the OpenRouter model failed for a reason other than
+    rate-limiting (429 is handled separately -- see LLMClient.generate).
+    """
 
 
-class AllTiersFailedError(RuntimeError):
-    """Raised when both the primary and fallback OpenRouter free models failed."""
-
-
-def _call_openrouter(model_id: str, prompt: str, system_prompt: str | None) -> str:
+def _call_openrouter(prompt: str, system_prompt: str | None) -> str:
     messages = []
     if system_prompt:
         messages.append({"role": "system", "content": system_prompt})
@@ -49,7 +45,7 @@ def _call_openrouter(model_id: str, prompt: str, system_prompt: str | None) -> s
     response = requests.post(
         _OPENROUTER_URL,
         headers={"Authorization": f"Bearer {config.OPENROUTER_API_KEY}"},
-        json={"model": model_id, "messages": messages},
+        json={"model": config.OPENROUTER_MODEL_ID, "messages": messages},
         timeout=_REQUEST_TIMEOUT_SECONDS,
     )
     response.raise_for_status()
@@ -57,10 +53,12 @@ def _call_openrouter(model_id: str, prompt: str, system_prompt: str | None) -> s
 
 
 class LLMClient:
-    """generate() tries the primary OpenRouter free-tier model
-    (config.OPENROUTER_MODEL_ID); on rate-limit/error, falls back to a second
-    free OpenRouter model (config.OPENROUTER_FALLBACK_MODEL_ID). Logs which
-    tier actually served each request.
+    """generate() calls the single configured OpenRouter model
+    (config.OPENROUTER_MODEL_ID). On a 429 (rate limit), returns
+    config.RATE_LIMIT_MESSAGE instead of raising -- rate limiting is an
+    expected, recoverable condition, not a bug, so it gets an in-character
+    reply rather than a generic error. Any other failure raises
+    GenerationFailedError.
     """
 
     def __init__(self) -> None:
@@ -68,30 +66,16 @@ class LLMClient:
 
     def generate(self, prompt: str, system_prompt: str | None = None) -> str:
         if not config.OPENROUTER_API_KEY:
-            raise AllTiersFailedError("OPENROUTER_API_KEY not set in .env")
+            raise GenerationFailedError("OPENROUTER_API_KEY not set in .env")
 
         try:
-            result = _call_openrouter(config.OPENROUTER_MODEL_ID, prompt, system_prompt)
-            logger.info(
-                "llm request served by tier=%s model=%s",
-                ServingTier.OPENROUTER_PRIMARY.value,
-                config.OPENROUTER_MODEL_ID,
-            )
+            result = _call_openrouter(prompt, system_prompt)
+            logger.info("llm request served by model=%s", config.OPENROUTER_MODEL_ID)
             return result
+        except requests.HTTPError as exc:
+            if exc.response is not None and exc.response.status_code == _RATE_LIMIT_STATUS_CODE:
+                logger.warning("OpenRouter rate-limited (429), returning stock reply")
+                return config.RATE_LIMIT_MESSAGE
+            raise GenerationFailedError(f"OpenRouter request failed: {exc}") from exc
         except requests.RequestException as exc:
-            logger.warning(
-                "Primary free model failed (%s), falling back to secondary free model", exc
-            )
-
-        try:
-            result = _call_openrouter(
-                config.OPENROUTER_FALLBACK_MODEL_ID, prompt, system_prompt
-            )
-            logger.info(
-                "llm request served by tier=%s model=%s",
-                ServingTier.OPENROUTER_FALLBACK.value,
-                config.OPENROUTER_FALLBACK_MODEL_ID,
-            )
-            return result
-        except requests.RequestException as exc:
-            raise AllTiersFailedError("Both OpenRouter free-tier models failed") from exc
+            raise GenerationFailedError(f"OpenRouter request failed: {exc}") from exc

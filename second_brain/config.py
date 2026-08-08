@@ -21,24 +21,30 @@ VECTOR_STORE_PATH = "data/chroma"
 BM25_INDEX_PATH = "data/bm25_chunks.json"
 
 # --- generation (consumed once generation/ is implemented) ---
-# OpenRouter free tier only, two models deep, by request -- no paid tier, no
-# local model. ("openrouter/free" was tried as a "paid" fallback id earlier;
-# it isn't a real chat model and sometimes returned garbage like a literal
-# "User Safety: safe" instead of an answer. Local Ollama was also slower than
-# the free API tier on this hardware -- see llm_client.py's docstring.)
+# Single OpenRouter free-tier model, by request -- no fallback model, no paid
+# tier, no local model. A two-model fallback was tried first, but OpenRouter
+# rate limiting turned out to hit the whole account, not just one model, so
+# the fallback attempt usually 429'd too -- it just added latency before
+# failing anyway. ("openrouter/free" was also tried earlier as a "paid"
+# fallback id; it isn't a real chat model and sometimes returned garbage like
+# a literal "User Safety: safe" instead of an answer. Local Ollama was slower
+# than the free API tier on this hardware too.)
 # Benchmarked against several free-tier models on 2026-08-08 -- model size
 # didn't predict speed (some "nano"/9B models were slower than this one):
-#   inclusionai/ling-3.0-tiny:free         ~1.6-5.5s  (primary)
-#   nvidia/nemotron-3-nano-30b-a3b:free    ~7.4s      (fallback)
+#   inclusionai/ling-3.0-tiny:free         ~1.6-5.5s
+#   nvidia/nemotron-3-nano-30b-a3b:free    ~7.4s
 #   nvidia/nemotron-3-super-120b-a12b:free ~8.1s
 #   nvidia/nemotron-nano-9b-v2:free        ~14.4s
 #   openai/gpt-oss-20b:free                ~17.9s
-OPENROUTER_MODEL_ID = "inclusionai/ling-3.0-tiny:free"
-OPENROUTER_FALLBACK_MODEL_ID = "nvidia/nemotron-3-nano-30b-a3b:free"
+OPENROUTER_MODEL_ID = "google/gemma-4-31b-it:free"
 
 # --- personalization ---
 OWNER_NAME = "Igor"
 ASSISTANT_NAME = "Murzik"
+
+# Shown instead of an error when OpenRouter rate-limits us (429) -- an
+# expected, recoverable condition, not a bug.
+RATE_LIMIT_MESSAGE = "ia asteapta oleac, stai c ma gandesc"
 SYSTEM_PROMPT = (
     f"You are {ASSISTANT_NAME}, {OWNER_NAME}'s personal AI assistant -- his only one, "
     "built specifically to answer questions using his own notes (his \"second brain\" "
