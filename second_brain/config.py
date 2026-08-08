@@ -42,6 +42,21 @@ OPENROUTER_MODEL_ID = "google/gemma-4-31b-it:free"
 OWNER_NAME = "Igor"
 ASSISTANT_NAME = "Murzik"
 
+# Curated from two sticker packs Igor picked (Pamagiteumoliaiu_by_fStikBot,
+# cryptodurka_official_pack_by_fStikBot), fetched via getStickerSet. The
+# model can trigger one by including [[sticker:CATEGORY]] in its reply (see
+# SYSTEM_PROMPT and bot/telegram_bot.py, which parses and strips the marker).
+STICKERS = {
+    "eye_roll": "CAACAgIAAxUAAWp3L0iwvW9Ld6pdM6r1cLrtm7usAAJGWAACT2spSA1Tur2Fi57VPQQ",  # 🙄
+    "deadpan": "CAACAgIAAxUAAWp3L0hrh51SBaQQgQgK9x6CxmqhAALwXgACkQoZSsNe_YY21KK4PQQ",  # 😐
+    "done_with_you": "CAACAgIAAxUAAWp3L0gp60I3LGNR0APf0-1P_g6hAAKhTwACBhkgSp6_mdG_sIYDPQQ",  # 😤
+    "shocked": "CAACAgIAAxUAAWp3L0jlXpj40aTjRJDKHYZaYqqqAAK8VQACm7YZSnrPKzjqz0X7PQQ",  # 😳
+    "dead": "CAACAgIAAxUAAWp3L0jgneapAklS8n0BakTBfrLaAAJkUwACkkYgSvLcXkYTCq8hPQQ",  # 💀
+    "bored": "CAACAgIAAxUAAWp3L0h4eUO3siJlNoVjyTJeRVo0AALQUAACbdQYSo4MUp1Tg3QIPQQ",  # 🥱
+    "cant_even": "CAACAgIAAxUAAWp3L0kDuhl3a_O3ifENllRv_usfAAKGTwACve6BSEoY9d-YwzYwPQQ",  # 🙉
+    "laughing": "CAACAgIAAxUAAWp3L0mKWPaVZ8DLzPPtCx0CPk1tAALDTgACw32ISBzRhsW7riC-PQQ",  # 😂
+}
+
 # Shown instead of an error when OpenRouter rate-limits us (429) -- an
 # expected, recoverable condition, not a bug.
 RATE_LIMIT_MESSAGE = "ia asteapta oleac, stai c ma gandesc"
@@ -77,7 +92,13 @@ SYSTEM_PROMPT = (
     "not.\n\n"
     "Never show your reasoning, internal thoughts, or a 'thinking' section -- reply "
     "with only the final answer, nothing else. Use Markdown (bold, bullet lists) since "
-    "replies render in Telegram."
+    "replies render in Telegram.\n\n"
+    "You can also send a sticker when it fits better than words -- something obvious, "
+    "something annoying, an eye-roll moment. To do that, put a marker anywhere in your "
+    "reply: [[sticker:CATEGORY]], where CATEGORY is one of: "
+    f"{', '.join(STICKERS)}. It'll be sent as an actual sticker and stripped from the "
+    "text automatically -- you can use it alone or alongside a short reply. Use it "
+    "sparingly, only when it actually lands, not on every message."
 )
 
 # --- environment-sourced secrets / machine-specific paths ---

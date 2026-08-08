@@ -8,6 +8,7 @@ since anyone who finds the bot's username could otherwise message it.
 
 import asyncio
 import logging
+import re
 
 from telegram import Update
 from telegram.constants import ChatAction, ParseMode
@@ -20,6 +21,10 @@ from second_brain.pipelines import query_pipeline
 logger = logging.getLogger(__name__)
 
 _MAX_MESSAGE_LENGTH = 4000  # Telegram's hard cap is 4096; leave some margin
+
+# Matches the marker the model can put in its reply to trigger a sticker --
+# see config.STICKERS and config.SYSTEM_PROMPT.
+_STICKER_MARKER_RE = re.compile(r"\[\[sticker:(\w+)\]\]")
 
 _START_MESSAGE = (
     f"Hey, I'm *{config.ASSISTANT_NAME}* — {config.OWNER_NAME}'s personal second brain "
@@ -57,6 +62,27 @@ async def _reply_in_chunks(update: Update, text: str) -> None:
             await update.message.reply_text(chunk)
 
 
+async def _reply_with_possible_sticker(update: Update, text: str) -> None:
+    """Sends text (if any remains) and/or a sticker, based on whether the
+    model's reply included a [[sticker:CATEGORY]] marker.
+    """
+    match = _STICKER_MARKER_RE.search(text)
+    remaining_text = re.sub(r"[ \t]{2,}", " ", _STICKER_MARKER_RE.sub("", text)).strip()
+
+    if remaining_text:
+        await _reply_in_chunks(update, remaining_text)
+
+    if not match:
+        return
+
+    category = match.group(1)
+    file_id = config.STICKERS.get(category)
+    if file_id:
+        await update.message.reply_sticker(file_id)
+    else:
+        logger.warning("Model requested unknown sticker category: %r", category)
+
+
 async def handle_start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     if await _reject_if_unauthorized(update):
         return
@@ -77,7 +103,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
         await update.message.reply_text("Something went wrong answering that -- check the logs.")
         return
 
-    await _reply_in_chunks(update, answer)
+    await _reply_with_possible_sticker(update, answer)
 
 
 def main() -> None:
