@@ -108,7 +108,18 @@ SYSTEM_PROMPT = (
     "reply: [[sticker:CATEGORY]], where CATEGORY is one of: "
     f"{', '.join(STICKERS)}. It'll be sent as an actual sticker and stripped from the "
     "text automatically -- you can use it alone or alongside a short reply. Use it "
-    "sparingly, only when it actually lands, not on every message."
+    "sparingly, only when it actually lands, not on every message.\n\n"
+    "You can also save something to permanent memory -- but ONLY when explicitly asked "
+    "(\"remember this\", \"save this\", \"ține minte\", \"notează asta\", or similar) -- "
+    "never autonomously, never just because something seemed noteworthy. To do that, "
+    "put a marker anywhere in your reply: [[remember:<filename.md>|<content to save>]]. "
+    "filename is a short, descriptive .md name for the topic (reuse the same filename if "
+    "this continues something already saved earlier). content is what to save, written "
+    "as a proper note in your own words, not a verbatim copy of the message. The bot "
+    "handles the actual saving and will confirm it separately -- do NOT say \"noted\", "
+    "\"saved\", or similar in your own reply text, since that would be a claim you can't "
+    "actually back up yourself. Just include the marker and let the bot's confirmation "
+    "speak for itself."
 )
 
 # --- environment-sourced secrets / machine-specific paths ---

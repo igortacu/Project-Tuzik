@@ -17,6 +17,7 @@ from telegram.error import BadRequest
 from telegram.ext import Application, CommandHandler, ContextTypes, MessageHandler, filters
 
 from second_brain import config
+from second_brain.agent import vault_writer
 from second_brain.bot.memory import ConversationMemory
 from second_brain.pipelines import query_pipeline
 
@@ -27,6 +28,13 @@ _MAX_MESSAGE_LENGTH = 4000  # Telegram's hard cap is 4096; leave some margin
 # Matches the marker the model can put in its reply to trigger a sticker --
 # see config.STICKERS and config.SYSTEM_PROMPT.
 _STICKER_MARKER_RE = re.compile(r"\[\[sticker:(\w+)\]\]")
+
+# Matches the marker the model can put in its reply to trigger a vault save --
+# see config.SYSTEM_PROMPT and agent/vault_writer.py. No owner/secondary-user
+# distinction yet -- everyone in TELEGRAM_ALLOWED_USER_IDS writes directly,
+# by request (the approval flow for non-owner writes is a separate,
+# not-yet-built piece).
+_REMEMBER_MARKER_RE = re.compile(r"\[\[remember:([^|]+)\|(.*?)\]\]", re.DOTALL)
 
 # In-process only, per chat -- cleared on restart. See bot/memory.py.
 _memory = ConversationMemory(config.CONVERSATION_HISTORY_TURNS)
@@ -92,6 +100,31 @@ async def _reply_with_possible_sticker(
         logger.warning("Model requested unknown sticker category: %r", sticker_category)
 
 
+def _strip_remember_marker(text: str) -> tuple[str, tuple[str, str] | None]:
+    """Splits a raw model reply into (visible_text, (filename, content)).
+    The second element is None if the reply had no [[remember:...]] marker.
+    """
+    match = _REMEMBER_MARKER_RE.search(text)
+    remaining_text = re.sub(r"[ \t]{2,}", " ", _REMEMBER_MARKER_RE.sub("", text)).strip()
+    if not match:
+        return remaining_text, None
+    filename, content = match.group(1).strip(), match.group(2).strip()
+    return remaining_text, (filename, content)
+
+
+async def _handle_remember_request(filename: str, content: str) -> str:
+    """Performs the save and returns a confirmation string -- the bot's own
+    words, not the model's, since the model isn't allowed to claim this
+    happened in its own reply text (see SYSTEM_PROMPT).
+    """
+    try:
+        path = await asyncio.to_thread(vault_writer.append_note, filename, content)
+        return f"✅ Saved to `{config.MURZIK_NOTES_DIR}/{path.name}`."
+    except vault_writer.VaultWriteError:
+        logger.exception("Failed to save note (filename=%r)", filename)
+        return "⚠️ Couldn't save that one -- check the logs."
+
+
 async def handle_start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     if await _reject_if_unauthorized(update):
         return
@@ -115,7 +148,12 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
         await update.message.reply_text("Something went wrong answering that -- check the logs.")
         return
 
-    remaining_text, sticker_category = _strip_sticker_marker(answer)
+    remaining_text, remember_request = _strip_remember_marker(answer)
+    if remember_request is not None:
+        confirmation = await _handle_remember_request(*remember_request)
+        remaining_text = f"{remaining_text}\n\n{confirmation}" if remaining_text else confirmation
+
+    remaining_text, sticker_category = _strip_sticker_marker(remaining_text)
     await _reply_with_possible_sticker(update, remaining_text, sticker_category)
     _memory.append(chat_id, question, remaining_text or answer)
 
