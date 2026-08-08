@@ -36,7 +36,7 @@ BM25_INDEX_PATH = "data/bm25_chunks.json"
 #   nvidia/nemotron-3-super-120b-a12b:free ~8.1s
 #   nvidia/nemotron-nano-9b-v2:free        ~14.4s
 #   openai/gpt-oss-20b:free                ~17.9s
-OPENROUTER_MODEL_ID = "inclusionai/ling-3.0-tiny:free"
+OPENROUTER_MODEL_ID = "deepseek/deepseek-v4-pro"  # paid -- consumes OpenRouter credits per query
 
 # --- personalization ---
 OWNER_NAME = "Igor"

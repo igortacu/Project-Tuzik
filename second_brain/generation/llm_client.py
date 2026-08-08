@@ -45,7 +45,7 @@ def _call_openrouter(prompt: str, system_prompt: str | None) -> str:
     response = requests.post(
         _OPENROUTER_URL,
         headers={"Authorization": f"Bearer {config.OPENROUTER_API_KEY}"},
-        json={"model": config.OPENROUTER_MODEL_ID, "messages": messages},
+        json={"model": config.OPENROUTER_MODEL_ID.strip(), "messages": messages},
         timeout=_REQUEST_TIMEOUT_SECONDS,
     )
     response.raise_for_status()

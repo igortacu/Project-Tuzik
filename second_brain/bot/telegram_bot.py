@@ -120,11 +120,11 @@ def _warn_if_model_unknown() -> None:
     except requests.RequestException:
         return
 
-    if config.OPENROUTER_MODEL_ID not in known_ids:
+    if config.OPENROUTER_MODEL_ID.strip() not in known_ids:
         logger.warning(
             "config.OPENROUTER_MODEL_ID=%r was not found in OpenRouter's current "
             "model list -- every query will fail until this is fixed. Check "
-            "https://openrouter.ai/models for a valid free-tier model id.",
+            "https://openrouter.ai/models for a valid model id.",
             config.OPENROUTER_MODEL_ID,
         )
 
