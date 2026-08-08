@@ -31,6 +31,20 @@ def _is_authorized(user_id: int) -> bool:
     return user_id in config.TELEGRAM_ALLOWED_USER_IDS
 
 
+async def _reject_if_unauthorized(update: Update) -> bool:
+    """True (and replies) if the sender isn't authorized. Every handler that
+    can produce a reply must call this first -- there's no other gate.
+    """
+    user_id = update.effective_user.id
+    if _is_authorized(user_id):
+        return False
+    await update.message.reply_text(
+        f"Not authorized. Your Telegram user id is {user_id} -- add it to "
+        "TELEGRAM_ALLOWED_USER_IDS in .env to use this bot."
+    )
+    return True
+
+
 async def _reply_in_chunks(update: Update, text: str) -> None:
     for start in range(0, len(text), _MAX_MESSAGE_LENGTH):
         chunk = text[start : start + _MAX_MESSAGE_LENGTH]
@@ -44,17 +58,13 @@ async def _reply_in_chunks(update: Update, text: str) -> None:
 
 
 async def handle_start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    if await _reject_if_unauthorized(update):
+        return
     await update.message.reply_text(_START_MESSAGE, parse_mode=ParseMode.MARKDOWN)
 
 
 async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    user_id = update.effective_user.id
-
-    if not _is_authorized(user_id):
-        await update.message.reply_text(
-            f"Not authorized. Your Telegram user id is {user_id} -- add it to "
-            "TELEGRAM_ALLOWED_USER_IDS in .env to use this bot."
-        )
+    if await _reject_if_unauthorized(update):
         return
 
     question = update.message.text
@@ -82,8 +92,15 @@ def main() -> None:
         )
 
     app = Application.builder().token(config.TELEGRAM_BOT_TOKEN).build()
-    app.add_handler(CommandHandler("start", handle_start))
-    app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
+    # Restrict to private (1:1) chats: if this bot is ever added to a group,
+    # its replies -- which contain personal note content -- would otherwise
+    # be visible to everyone in that group, not just the authorized user.
+    app.add_handler(CommandHandler("start", handle_start, filters=filters.ChatType.PRIVATE))
+    app.add_handler(
+        MessageHandler(
+            filters.ChatType.PRIVATE & filters.TEXT & ~filters.COMMAND, handle_message
+        )
+    )
 
     logger.info("Starting Telegram bot (long-polling)...")
     app.run_polling()
