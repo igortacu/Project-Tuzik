@@ -23,4 +23,8 @@ def build_prompt(query: str, chunks: list[RetrievedChunk]) -> str:
             sections.append(f"{header}\n{chunk.text}")
         context_block = "\n\n---\n\n".join(sections)
 
-    return f"Context:\n{context_block}\n\nQuestion: {query}\nAnswer:"
+    return (
+        "Context (retrieved automatically -- may be irrelevant; ONLY use it if the "
+        f"message below actually requires it, otherwise ignore it completely):\n{context_block}"
+        f"\n\nMessage: {query}\nReply:"
+    )
