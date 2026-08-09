@@ -1,0 +1,5 @@
+services:
+  murzik:
+    volumes:
+      - ./data:/app/data
+      - /Users/igortacu/Desktop/TuzikVault/TuzikVault:/vault

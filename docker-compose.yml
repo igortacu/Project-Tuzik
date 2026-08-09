@@ -1,0 +1,15 @@
+services:
+  murzik:
+    build: .
+    container_name: murzik_bot
+    restart: unless-stopped
+    env_file:
+      - .env
+    environment:
+      - OBSIDIAN_VAULT_PATH=/vault
+    volumes:
+      - ./data:/app/data
+      - vault:/vault
+
+volumes:
+  vault:
