@@ -2,7 +2,7 @@
 execute_tool() which actually runs one when the model calls it.
 """
 
-from second_brain.agent import maps, web_search
+from second_brain.agent import maps, vault_writer, web_search
 
 TOOLS_SCHEMA = [
     {
@@ -52,6 +52,31 @@ TOOLS_SCHEMA = [
             },
         },
     },
+    {
+        "type": "function",
+        "function": {
+            "name": "append_vault_note",
+            "description": "Create or append a Markdown note under Igor's restricted "
+            "Murzik Notes/ vault folder. Use only when Igor explicitly asks to "
+            "remember, save, note down, or update notes with new information. "
+            "This cannot edit or delete arbitrary existing vault files.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "filename": {
+                        "type": "string",
+                        "description": "Markdown filename under Murzik Notes/, e.g. "
+                        "project_updates.md. No absolute paths or ../ traversal.",
+                    },
+                    "content": {
+                        "type": "string",
+                        "description": "Concise Markdown content to append.",
+                    },
+                },
+                "required": ["filename", "content"],
+            },
+        },
+    },
 ]
 
 
@@ -88,5 +113,14 @@ def execute_tool(name: str, arguments: dict, image_urls_out: list[str]) -> str:
             arguments["destination"], arguments.get("origin"), arguments.get("mode", "driving")
         )
         return f"Directions link: {link}"
+
+    if name == "append_vault_note":
+        try:
+            path = vault_writer.append_note(arguments["filename"], arguments["content"])
+        except KeyError as exc:
+            return f"Vault write failed: missing required argument {exc.args[0]!r}."
+        except vault_writer.VaultWriteError as exc:
+            return f"Vault write failed: {exc}"
+        return f"Saved to vault note: {path}"
 
     return f"Unknown tool: {name}"

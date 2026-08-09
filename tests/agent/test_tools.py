@@ -5,7 +5,12 @@ from second_brain.agent import tools, web_search
 
 def test_tools_schema_has_expected_function_names():
     names = {t["function"]["name"] for t in tools.TOOLS_SCHEMA}
-    assert names == {"web_search", "image_search", "get_directions_link"}
+    assert names == {
+        "web_search",
+        "image_search",
+        "get_directions_link",
+        "append_vault_note",
+    }
 
 
 def test_execute_tool_unknown_name():
@@ -74,3 +79,29 @@ def test_execute_tool_get_directions_link():
     )
     assert "https://www.google.com/maps/dir/" in result
     assert "Chisinau" in result
+
+
+def test_execute_tool_append_vault_note():
+    with patch(
+        "second_brain.agent.vault_writer.append_note",
+        return_value="/vault/Murzik Notes/project_updates.md",
+    ) as mock_append:
+        result = tools.execute_tool(
+            "append_vault_note",
+            {"filename": "project_updates.md", "content": "Docker is deployed."},
+            [],
+        )
+
+    mock_append.assert_called_once_with("project_updates.md", "Docker is deployed.")
+    assert "Saved to vault note" in result
+    assert "project_updates.md" in result
+
+
+def test_execute_tool_append_vault_note_missing_argument():
+    result = tools.execute_tool(
+        "append_vault_note",
+        {"filename": "project_updates.md"},
+        [],
+    )
+
+    assert "missing required argument" in result
