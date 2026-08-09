@@ -9,6 +9,8 @@ since anyone who finds the bot's username could otherwise message it.
 import asyncio
 import logging
 import re
+import threading
+from pathlib import Path
 
 import requests
 from telegram import Update
@@ -19,7 +21,8 @@ from telegram.ext import Application, CommandHandler, ContextTypes, MessageHandl
 from second_brain import config
 from second_brain.agent import vault_writer
 from second_brain.bot.memory import ConversationMemory
-from second_brain.pipelines import query_pipeline
+from second_brain.ingestion.watcher import ChangeType, FileChanged, VaultWatcher
+from second_brain.pipelines import index_pipeline, query_pipeline
 
 logger = logging.getLogger(__name__)
 
@@ -180,10 +183,43 @@ def _warn_if_model_unknown() -> None:
         )
 
 
+def _on_vault_change(change: FileChanged) -> None:
+    """Re-indexes a note after an edit made outside the bot (e.g. directly in
+    Obsidian). Runs on the watcher's own background thread, not the bot's
+    event loop -- index_pipeline calls are blocking, that's fine here.
+    """
+    try:
+        if change.event_type == ChangeType.DELETED:
+            index_pipeline.delete_file(change.path)
+        else:
+            index_pipeline.index_file(change.path, change.raw_text)
+        logger.info(
+            "Re-indexed external vault change: %s (%s)", change.path, change.event_type.value
+        )
+    except Exception:
+        logger.exception("Failed to re-index vault change: %s", change.path)
+
+
+def _start_vault_watcher() -> None:
+    """Watches the vault for changes made outside the bot (editing a note
+    directly in Obsidian, deleting one, etc.) so they're picked up live
+    instead of only on the next `second_brain index` run. Runs in a daemon
+    thread -- doesn't block startup or prevent the process from exiting.
+    """
+    if not config.VAULT_PATH:
+        logger.warning("OBSIDIAN_VAULT_PATH not set -- not watching for external vault changes.")
+        return
+    watcher = VaultWatcher(Path(config.VAULT_PATH))
+    thread = threading.Thread(target=watcher.watch, args=(_on_vault_change,), daemon=True)
+    thread.start()
+    logger.info("Watching vault for external changes: %s", config.VAULT_PATH)
+
+
 def main() -> None:
     logging.basicConfig(level=logging.INFO)
 
     _warn_if_model_unknown()
+    _start_vault_watcher()
 
     if not config.TELEGRAM_BOT_TOKEN:
         raise SystemExit("TELEGRAM_BOT_TOKEN not set in .env")
