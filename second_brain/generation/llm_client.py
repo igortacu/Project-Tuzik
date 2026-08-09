@@ -64,6 +64,13 @@ def _call_openrouter_message(messages: list[dict], tools: list[dict] | None = No
     payload = {"model": config.OPENROUTER_MODEL_ID.strip(), "messages": messages}
     if tools:
         payload["tools"] = tools
+        # Without this, the configured model (deepseek/deepseek-v4-flash)
+        # doesn't reliably use the structured tool_calls field -- it falls
+        # back to leaking a raw pseudo-XML imitation of a tool call directly
+        # into content instead. Confirmed via direct API testing: identical
+        # request with tool_choice omitted vs "auto" was the only
+        # difference between broken and working tool calls.
+        payload["tool_choice"] = "auto"
 
     response = requests.post(
         _OPENROUTER_URL,

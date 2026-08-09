@@ -161,3 +161,30 @@ def test_generate_with_tools_rate_limited_returns_stock_reply(monkeypatch):
 
     assert result.text == config.RATE_LIMIT_MESSAGE
     assert result.image_urls == []
+
+
+def test_generate_with_tools_sends_explicit_tool_choice_auto(monkeypatch):
+    """Regression test: deepseek/deepseek-v4-flash doesn't reliably populate
+    the structured tool_calls field without tool_choice explicitly set to
+    "auto" -- confirmed via direct API testing. Without it, tool calls leak
+    as raw text into content instead of being machine-parseable.
+    """
+    monkeypatch.setattr(config, "OPENROUTER_API_KEY", "fake-key")
+    client = LLMClient()
+    response = _fake_message_response({"role": "assistant", "content": "plain answer"})
+
+    with patch("requests.post", return_value=response) as mock_post:
+        client.generate_with_tools("question")
+
+    assert mock_post.call_args.kwargs["json"]["tool_choice"] == "auto"
+
+
+def test_generate_without_tools_omits_tool_choice(monkeypatch):
+    monkeypatch.setattr(config, "OPENROUTER_API_KEY", "fake-key")
+    client = LLMClient()
+
+    with patch("requests.post", return_value=_fake_ok_response("ok")) as mock_post:
+        client.generate("question")
+
+    assert "tool_choice" not in mock_post.call_args.kwargs["json"]
+    assert "tools" not in mock_post.call_args.kwargs["json"]
