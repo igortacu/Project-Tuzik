@@ -77,6 +77,35 @@ TOOLS_SCHEMA = [
             },
         },
     },
+    {
+        "type": "function",
+        "function": {
+            "name": "edit_vault_note",
+            "description": "Edit an existing Markdown note in Igor's vault by exact text "
+            "replacement. Use when Igor asks to correct or update an existing note. "
+            "This refuses to create missing files, edit non-Markdown files, edit "
+            "outside the vault, or replace text that is missing/ambiguous.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "filename": {
+                        "type": "string",
+                        "description": "Vault-relative path to an existing Markdown file, "
+                        "e.g. project.md or Folder/note.md. No absolute paths or ../ traversal.",
+                    },
+                    "old_text": {
+                        "type": "string",
+                        "description": "Exact existing snippet to replace. Must be unique in the file.",
+                    },
+                    "new_text": {
+                        "type": "string",
+                        "description": "Replacement Markdown text.",
+                    },
+                },
+                "required": ["filename", "old_text", "new_text"],
+            },
+        },
+    },
 ]
 
 
@@ -122,5 +151,16 @@ def execute_tool(name: str, arguments: dict, image_urls_out: list[str]) -> str:
         except vault_writer.VaultWriteError as exc:
             return f"Vault write failed: {exc}"
         return f"Saved to vault note: {path}"
+
+    if name == "edit_vault_note":
+        try:
+            path = vault_writer.edit_existing_note(
+                arguments["filename"], arguments["old_text"], arguments["new_text"]
+            )
+        except KeyError as exc:
+            return f"Vault edit failed: missing required argument {exc.args[0]!r}."
+        except vault_writer.VaultWriteError as exc:
+            return f"Vault edit failed: {exc}"
+        return f"Edited vault note: {path}"
 
     return f"Unknown tool: {name}"

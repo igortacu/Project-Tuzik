@@ -10,6 +10,7 @@ def test_tools_schema_has_expected_function_names():
         "image_search",
         "get_directions_link",
         "append_vault_note",
+        "edit_vault_note",
     }
 
 
@@ -101,6 +102,36 @@ def test_execute_tool_append_vault_note_missing_argument():
     result = tools.execute_tool(
         "append_vault_note",
         {"filename": "project_updates.md"},
+        [],
+    )
+
+    assert "missing required argument" in result
+
+
+def test_execute_tool_edit_vault_note():
+    with patch(
+        "second_brain.agent.vault_writer.edit_existing_note",
+        return_value="/vault/project.md",
+    ) as mock_edit:
+        result = tools.execute_tool(
+            "edit_vault_note",
+            {
+                "filename": "project.md",
+                "old_text": "Docker is wanted.",
+                "new_text": "Docker is done.",
+            },
+            [],
+        )
+
+    mock_edit.assert_called_once_with("project.md", "Docker is wanted.", "Docker is done.")
+    assert "Edited vault note" in result
+    assert "project.md" in result
+
+
+def test_execute_tool_edit_vault_note_missing_argument():
+    result = tools.execute_tool(
+        "edit_vault_note",
+        {"filename": "project.md", "old_text": "old"},
         [],
     )
 
