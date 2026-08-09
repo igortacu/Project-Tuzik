@@ -52,9 +52,10 @@ OPENROUTER_MODEL_ID = "deepseek/deepseek-v4-flash"
 OWNER_NAME = "Igor"
 ASSISTANT_NAME = "Murzik"
 
-# Curated from two sticker packs Igor picked (Pamagiteumoliaiu_by_fStikBot,
-# cryptodurka_official_pack_by_fStikBot), fetched via getStickerSet. The
-# model can trigger one by including [[sticker:CATEGORY]] in its reply (see
+# Curated from five sticker packs Igor picked (Pamagiteumoliaiu_by_fStikBot,
+# cryptodurka_official_pack_by_fStikBot, Peregovoru20, RaNdOmdesaxxz_by_fStikBot,
+# vodkaandpivas_by_fStikBot), fetched via getStickerSet. The model can
+# trigger one by including [[sticker:CATEGORY]] in its reply (see
 # SYSTEM_PROMPT and bot/telegram_bot.py, which parses and strips the marker).
 STICKERS = {
     "eye_roll": "CAACAgIAAxUAAWp3L0iwvW9Ld6pdM6r1cLrtm7usAAJGWAACT2spSA1Tur2Fi57VPQQ",  # 🙄
@@ -65,6 +66,15 @@ STICKERS = {
     "bored": "CAACAgIAAxUAAWp3L0h4eUO3siJlNoVjyTJeRVo0AALQUAACbdQYSo4MUp1Tg3QIPQQ",  # 🥱
     "cant_even": "CAACAgIAAxUAAWp3L0kDuhl3a_O3ifENllRv_usfAAKGTwACve6BSEoY9d-YwzYwPQQ",  # 🙉
     "laughing": "CAACAgIAAxUAAWp3L0mKWPaVZ8DLzPPtCx0CPk1tAALDTgACw32ISBzRhsW7riC-PQQ",  # 😂
+    "shrug": "CAACAgIAAxUAAWp4YBXWp89VLlCohMu61gq5h0whAAItAAOBWUsiNcp_YI1XDLc9BA",  # 🤷‍♂
+    "liar": "CAACAgIAAxUAAWp4YBXE62coos6RWNgjSxVOa61QAAIzAAOBWUsiAtNUEXTer-U9BA",  # 🤥
+    "mind_blown": "CAACAgIAAxUAAWp4YBWq6FYLIuZliRxw551AN_PTAAIVAAOBWUsiv7bfh2GY30M9BA",  # 🤯
+    "clown": "CAACAgQAAxUAAWp4YBUVMkfLBabMLFhgC2sqLtbvAAJUEgACNMvoUGmEJ1Ip8ljoPQQ",  # 🤡
+    "furious": "CAACAgQAAxUAAWp4YBWluG5BJ7f0-OWoVV7oP3k2AAKsEgAC4xfgUO8QBZogwvtiPQQ",  # 🤬
+    "middle_finger": "CAACAgIAAxUAAWp4YBVhs9rUOXUJnnA6kGQ2eUqXAAJRAAPVCI05Nc3p0-NcUZg9BA",  # 🖕
+    "cheers": "CAACAgIAAxUAAWp4YBUnICKSvw6P_rR4Jz6hXAKLAAJYAAPVCI051SulYjC3wjc9BA",  # 🍺
+    "skeptical": "CAACAgIAAxUAAWp4YBW55yyhFnoVUlNIlQSdikXXAAItAAPVCI05saIQhUU7FA09BA",  # 🤨
+    "silence": "CAACAgIAAxUAAWp4YBVt6MZJqHjI9hbzhkwvyIj7AAICAAOBWUsiwej0wnpiN0M9BA",  # 🤐
 }
 
 # Shown instead of an error when OpenRouter rate-limits us (429) -- an
