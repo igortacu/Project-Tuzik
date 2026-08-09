@@ -44,6 +44,18 @@ MAX_TOOL_ROUNDS = 3
 # a single tool call can't spam the chat with dozens of photos.
 IMAGE_SEARCH_MAX_RESULTS = 3
 
+# --- voice transcription ---
+GROQ_TRANSCRIPTION_MODEL_ID = "whisper-large-v3-turbo"
+GROQ_TRANSCRIPTION_URL = "https://api.groq.com/openai/v1/audio/transcriptions"
+# Groq's free-tier direct upload limit is 25 MB. Telegram voice messages are
+# OGG/Opus and normally much smaller, but keep the same hard guard here.
+VOICE_TRANSCRIPTION_MAX_BYTES = 25 * 1024 * 1024
+VOICE_TRANSCRIPTION_PROMPT = (
+    "Igor talks to Murzik in mixed Romanian, English, and Russian slang. "
+    "Common names and terms: Igor, Murzik, Tuzik, LucAuto, Obsidian, Docker, "
+    "Syncthing, Crete."
+)
+
 # --- embedding / storage (consumed once embedding/ and storage/ are implemented) ---
 EMBEDDING_MODEL_NAME = "all-MiniLM-L6-v2"
 VECTOR_STORE_PATH = "data/chroma"
@@ -174,6 +186,7 @@ VAULT_PATH = os.environ.get("OBSIDIAN_VAULT_PATH")
 OPENROUTER_API_KEY = os.environ.get("OPENROUTER_API_KEY")
 TELEGRAM_BOT_TOKEN = os.environ.get("TELEGRAM_BOT_TOKEN")
 BRAVE_SEARCH_API_KEY = os.environ.get("BRAVE_SEARCH_API_KEY")
+GROQ_API_KEY = os.environ.get("GROQ_API_KEY")
 
 # Comma-separated Telegram user ids allowed to query the bot, e.g. "12345678".
 # Empty/unset means nobody is authorized yet -- the bot tells any sender

@@ -28,6 +28,7 @@ from second_brain.generation.conversation_summarizer import (
     is_nothing_to_save,
 )
 from second_brain.generation.llm_client import LLMClient
+from second_brain.generation.speech_to_text import SpeechToTextError, transcribe_audio
 from second_brain.ingestion.watcher import ChangeType, FileChanged, VaultWatcher
 from second_brain.pipelines import index_pipeline, query_pipeline
 
@@ -147,11 +148,7 @@ async def handle_start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
     await update.message.reply_text(_START_MESSAGE, parse_mode=ParseMode.MARKDOWN)
 
 
-async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    if await _reject_if_unauthorized(update):
-        return
-
-    question = update.message.text
+async def _answer_message(update: Update, question: str) -> None:
     chat_id = update.effective_chat.id
     await update.message.chat.send_action(ChatAction.TYPING)
 
@@ -175,6 +172,40 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
     final_text = remaining_text or result.text
     _memory.append(chat_id, question, final_text)
     _save_buffer.append(chat_id, question, final_text)
+
+
+async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    if await _reject_if_unauthorized(update):
+        return
+
+    question = update.message.text
+    await _answer_message(update, question)
+
+
+async def handle_voice(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    if await _reject_if_unauthorized(update):
+        return
+
+    voice = update.message.voice
+    if voice.file_size and voice.file_size > config.VOICE_TRANSCRIPTION_MAX_BYTES:
+        await update.message.reply_text("Voice message is too large to transcribe.")
+        return
+
+    await update.message.chat.send_action(ChatAction.TYPING)
+    try:
+        telegram_file = await voice.get_file()
+        audio_bytes = bytes(await telegram_file.download_as_bytearray())
+        question = await asyncio.to_thread(transcribe_audio, audio_bytes, "telegram-voice.ogg")
+    except SpeechToTextError as exc:
+        logger.warning("voice transcription failed: %s", exc)
+        await update.message.reply_text(f"Voice transcription isn't available right now: {exc}")
+        return
+    except Exception:
+        logger.exception("failed to download/transcribe voice message")
+        await update.message.reply_text("Something went wrong transcribing that voice message.")
+        return
+
+    await _answer_message(update, question)
 
 
 def _warn_if_model_unknown() -> None:
@@ -286,6 +317,7 @@ def main() -> None:
     # its replies -- which contain personal note content -- would otherwise
     # be visible to everyone in that group, not just the authorized user.
     app.add_handler(CommandHandler("start", handle_start, filters=filters.ChatType.PRIVATE))
+    app.add_handler(MessageHandler(filters.ChatType.PRIVATE & filters.VOICE, handle_voice))
     app.add_handler(
         MessageHandler(
             filters.ChatType.PRIVATE & filters.TEXT & ~filters.COMMAND, handle_message
