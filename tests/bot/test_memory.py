@@ -1,4 +1,4 @@
-from second_brain.bot.memory import ConversationMemory
+from second_brain.bot.memory import ConversationMemory, SaveBuffer
 
 
 def test_empty_history_for_unknown_chat():
@@ -48,3 +48,45 @@ def test_different_chats_are_independent():
 
     assert memory.get(1) == [("user", "chat one question"), ("assistant", "chat one answer")]
     assert memory.get(2) == [("user", "chat two question"), ("assistant", "chat two answer")]
+
+
+# --- SaveBuffer ---
+
+
+def test_save_buffer_drain_empty_for_unknown_chat():
+    buffer = SaveBuffer()
+    assert buffer.drain(123) == []
+
+
+def test_save_buffer_append_and_drain_roundtrip():
+    buffer = SaveBuffer()
+    buffer.append(1, "q1", "a1")
+    buffer.append(1, "q2", "a2")
+
+    assert buffer.drain(1) == [("q1", "a1"), ("q2", "a2")]
+
+
+def test_save_buffer_drain_clears_the_buffer():
+    buffer = SaveBuffer()
+    buffer.append(1, "q1", "a1")
+    buffer.drain(1)
+
+    assert buffer.drain(1) == []
+
+
+def test_save_buffer_does_not_truncate_unlike_conversation_memory():
+    buffer = SaveBuffer()
+    for i in range(50):
+        buffer.append(1, f"q{i}", f"a{i}")
+
+    assert len(buffer.drain(1)) == 50
+
+
+def test_save_buffer_chat_ids_lists_chats_with_pending_data():
+    buffer = SaveBuffer()
+    buffer.append(1, "q", "a")
+    buffer.append(2, "q", "a")
+
+    assert set(buffer.chat_ids()) == {1, 2}
+    buffer.drain(1)
+    assert buffer.chat_ids() == [2]

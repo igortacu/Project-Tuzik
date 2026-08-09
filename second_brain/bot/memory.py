@@ -24,3 +24,26 @@ class ConversationMemory:
         history = self._history.setdefault(chat_id, deque(maxlen=self._max_turns * 2))
         history.append(("user", user_message))
         history.append(("assistant", assistant_reply))
+
+
+class SaveBuffer:
+    """Accumulates (user_message, assistant_reply) turns per chat_id since
+    the last drain. Unbounded, unlike ConversationMemory -- meant to be
+    periodically compressed and saved (see bot/telegram_bot.py's periodic
+    job), then cleared via drain().
+    """
+
+    def __init__(self) -> None:
+        self._buffers: dict[int, list[tuple[str, str]]] = {}
+
+    def append(self, chat_id: int, user_message: str, assistant_reply: str) -> None:
+        self._buffers.setdefault(chat_id, []).append((user_message, assistant_reply))
+
+    def drain(self, chat_id: int) -> list[tuple[str, str]]:
+        """Returns and clears the buffer for chat_id. Empty list if there's
+        nothing buffered (e.g. no new messages since the last drain).
+        """
+        return self._buffers.pop(chat_id, [])
+
+    def chat_ids(self) -> list[int]:
+        return list(self._buffers.keys())

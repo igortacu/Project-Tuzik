@@ -18,6 +18,14 @@ RRF_K = 60
 # --- conversation memory (in-process, per Telegram chat, cleared on restart) ---
 CONVERSATION_HISTORY_TURNS = 6
 
+# --- periodic conversation save (replaces explicit "remember this" commands) ---
+# Every PERIODIC_SAVE_INTERVAL_SECONDS, each chat with new messages since the
+# last save gets its conversation compressed by the LLM and appended to a
+# note under MURZIK_NOTES_DIR -- no keyword trigger needed, and nothing gets
+# written for a chat with no new messages in the window.
+PERIODIC_SAVE_INTERVAL_SECONDS = 3600
+PERIODIC_SAVE_NOTHING_SENTINEL = "NOTHING_TO_SAVE"
+
 # --- embedding / storage (consumed once embedding/ and storage/ are implemented) ---
 EMBEDDING_MODEL_NAME = "all-MiniLM-L6-v2"
 VECTOR_STORE_PATH = "data/chroma"
@@ -119,17 +127,10 @@ SYSTEM_PROMPT = (
     f"{', '.join(STICKERS)}. It'll be sent as an actual sticker and stripped from the "
     "text automatically -- you can use it alone or alongside a short reply. Use it "
     "sparingly, only when it actually lands, not on every message.\n\n"
-    "You can also save something to permanent memory -- but ONLY when explicitly asked "
-    "(\"remember this\", \"save this\", \"ține minte\", \"notează asta\", or similar) -- "
-    "never autonomously, never just because something seemed noteworthy. To do that, "
-    "put a marker anywhere in your reply: [[remember:<filename.md>|<content to save>]]. "
-    "filename is a short, descriptive .md name for the topic (reuse the same filename if "
-    "this continues something already saved earlier). content is what to save, written "
-    "as a proper note in your own words, not a verbatim copy of the message. The bot "
-    "handles the actual saving and will confirm it separately -- do NOT say \"noted\", "
-    "\"saved\", or similar in your own reply text, since that would be a claim you can't "
-    "actually back up yourself. Just include the marker and let the bot's confirmation "
-    "speak for itself."
+    "Conversations are periodically saved to permanent memory automatically in the "
+    "background -- you don't need to do anything for that, and you don't have any way "
+    "to trigger a save yourself. Never say \"noted\", \"saved\", or similar as if you "
+    "personally filed something away -- you didn't, that's handled separately."
 )
 
 # --- environment-sourced secrets / machine-specific paths ---

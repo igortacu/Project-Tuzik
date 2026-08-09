@@ -2,8 +2,8 @@ import asyncio
 from pathlib import Path
 from unittest.mock import patch
 
-from second_brain.agent import vault_writer
 from second_brain.bot import telegram_bot
+from second_brain.bot.memory import SaveBuffer
 
 
 def test_strip_sticker_marker_no_marker():
@@ -18,40 +18,70 @@ def test_strip_sticker_marker_strips_and_extracts_category():
     assert category == "eye_roll"
 
 
-def test_strip_remember_marker_no_marker():
-    text, request = telegram_bot._strip_remember_marker("just a normal reply")
-    assert text == "just a normal reply"
-    assert request is None
+def test_compress_and_save_chat_skips_when_nothing_to_save():
+    with (
+        patch(
+            "second_brain.bot.telegram_bot._summarizer_llm_client.generate",
+            return_value="NOTHING_TO_SAVE",
+        ),
+        patch("second_brain.bot.telegram_bot.vault_writer.append_note") as mock_append,
+    ):
+        asyncio.run(telegram_bot._compress_and_save_chat(123, [("hi", "hey")]))
+
+    mock_append.assert_not_called()
 
 
-def test_strip_remember_marker_extracts_filename_and_content():
-    raw = "Sure. [[remember:Anniversary.md|Igor and Loredana married ~1 year ago.]]"
-    text, request = telegram_bot._strip_remember_marker(raw)
-    assert text == "Sure."
-    assert request == ("Anniversary.md", "Igor and Loredana married ~1 year ago.")
+def test_compress_and_save_chat_writes_when_something_to_save():
+    fake_path = Path("/vault/Murzik Notes/conversation_123.md")
+    with (
+        patch(
+            "second_brain.bot.telegram_bot._summarizer_llm_client.generate",
+            return_value="Igor's birthday is March 3rd.",
+        ),
+        patch(
+            "second_brain.bot.telegram_bot.vault_writer.append_note", return_value=fake_path
+        ) as mock_append,
+    ):
+        asyncio.run(
+            telegram_bot._compress_and_save_chat(
+                123, [("my birthday is march 3", "noted, in a manner of speaking")]
+            )
+        )
+
+    mock_append.assert_called_once()
+    filename, content = mock_append.call_args.args
+    assert filename == "conversation_123.md"
+    assert "Igor's birthday is March 3rd." in content
 
 
-def test_strip_remember_marker_handles_multiline_content():
-    raw = "[[remember:notes.md|Line one.\nLine two.]] ok"
-    text, request = telegram_bot._strip_remember_marker(raw)
-    assert text == "ok"
-    assert request == ("notes.md", "Line one.\nLine two.")
+def test_periodic_save_job_skips_chats_with_nothing_buffered():
+    buffer = SaveBuffer()
+    buffer.append(1, "real question", "real answer")
+    # chat 2 has never had anything appended -- drain(2) returns []
 
+    calls = []
 
-def test_handle_remember_request_success_returns_confirmation():
-    fake_path = Path("/vault/Murzik Notes/x.md")
-    with patch("second_brain.bot.telegram_bot.vault_writer.append_note", return_value=fake_path):
-        result = asyncio.run(telegram_bot._handle_remember_request("x.md", "content"))
+    async def _fake_compress_and_save(chat_id, turns):
+        calls.append((chat_id, turns))
 
-    assert "Saved" in result
-    assert "x.md" in result
+    with (
+        patch("second_brain.bot.telegram_bot._save_buffer", buffer),
+        patch(
+            "second_brain.bot.telegram_bot._compress_and_save_chat",
+            side_effect=_fake_compress_and_save,
+        ),
+    ):
+        asyncio.run(telegram_bot.periodic_save_job(context=None))
 
-
-def test_handle_remember_request_failure_returns_error_message():
-    def _raise(filename, content):
-        raise vault_writer.VaultWriteError("nope")
-
-    with patch("second_brain.bot.telegram_bot.vault_writer.append_note", side_effect=_raise):
-        result = asyncio.run(telegram_bot._handle_remember_request("../escape.md", "content"))
-
-    assert "Couldn't save" in result
+    assert calls == [(1, [("real question", "real answer")])]
+    # draining is destructive -- a second run with nothing new does nothing
+    calls.clear()
+    with (
+        patch("second_brain.bot.telegram_bot._save_buffer", buffer),
+        patch(
+            "second_brain.bot.telegram_bot._compress_and_save_chat",
+            side_effect=_fake_compress_and_save,
+        ),
+    ):
+        asyncio.run(telegram_bot.periodic_save_job(context=None))
+    assert calls == []
