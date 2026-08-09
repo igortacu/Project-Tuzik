@@ -54,8 +54,8 @@ def test_compress_and_save_chat_writes_when_something_to_save():
     assert "Igor's birthday is March 3rd." in content
 
 
-def test_periodic_save_job_skips_chats_with_nothing_buffered():
-    buffer = SaveBuffer()
+def test_periodic_save_job_skips_chats_with_nothing_buffered(tmp_path):
+    buffer = SaveBuffer(persist_path=str(tmp_path / "save_buffer.json"))
     buffer.append(1, "real question", "real answer")
     # chat 2 has never had anything appended -- drain(2) returns []
 

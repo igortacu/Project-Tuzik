@@ -266,7 +266,7 @@ def main() -> None:
     app.job_queue.run_repeating(
         periodic_save_job,
         interval=config.PERIODIC_SAVE_INTERVAL_SECONDS,
-        first=config.PERIODIC_SAVE_INTERVAL_SECONDS,
+        first=config.PERIODIC_SAVE_FIRST_DELAY_SECONDS,
     )
 
     logger.info("Starting Telegram bot (long-polling)...")

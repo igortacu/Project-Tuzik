@@ -53,40 +53,64 @@ def test_different_chats_are_independent():
 # --- SaveBuffer ---
 
 
-def test_save_buffer_drain_empty_for_unknown_chat():
-    buffer = SaveBuffer()
+def _make_save_buffer(tmp_path):
+    return SaveBuffer(persist_path=str(tmp_path / "save_buffer.json"))
+
+
+def test_save_buffer_drain_empty_for_unknown_chat(tmp_path):
+    buffer = _make_save_buffer(tmp_path)
     assert buffer.drain(123) == []
 
 
-def test_save_buffer_append_and_drain_roundtrip():
-    buffer = SaveBuffer()
+def test_save_buffer_append_and_drain_roundtrip(tmp_path):
+    buffer = _make_save_buffer(tmp_path)
     buffer.append(1, "q1", "a1")
     buffer.append(1, "q2", "a2")
 
     assert buffer.drain(1) == [("q1", "a1"), ("q2", "a2")]
 
 
-def test_save_buffer_drain_clears_the_buffer():
-    buffer = SaveBuffer()
+def test_save_buffer_drain_clears_the_buffer(tmp_path):
+    buffer = _make_save_buffer(tmp_path)
     buffer.append(1, "q1", "a1")
     buffer.drain(1)
 
     assert buffer.drain(1) == []
 
 
-def test_save_buffer_does_not_truncate_unlike_conversation_memory():
-    buffer = SaveBuffer()
+def test_save_buffer_does_not_truncate_unlike_conversation_memory(tmp_path):
+    buffer = _make_save_buffer(tmp_path)
     for i in range(50):
         buffer.append(1, f"q{i}", f"a{i}")
 
     assert len(buffer.drain(1)) == 50
 
 
-def test_save_buffer_chat_ids_lists_chats_with_pending_data():
-    buffer = SaveBuffer()
+def test_save_buffer_chat_ids_lists_chats_with_pending_data(tmp_path):
+    buffer = _make_save_buffer(tmp_path)
     buffer.append(1, "q", "a")
     buffer.append(2, "q", "a")
 
     assert set(buffer.chat_ids()) == {1, 2}
     buffer.drain(1)
     assert buffer.chat_ids() == [2]
+
+
+def test_save_buffer_survives_a_simulated_restart(tmp_path):
+    persist_path = str(tmp_path / "save_buffer.json")
+    first = SaveBuffer(persist_path=persist_path)
+    first.append(1, "remember X", "ok")
+
+    # simulates a bot restart: a fresh instance pointed at the same file
+    second = SaveBuffer(persist_path=persist_path)
+    assert second.drain(1) == [("remember X", "ok")]
+
+
+def test_save_buffer_drain_persists_the_removal(tmp_path):
+    persist_path = str(tmp_path / "save_buffer.json")
+    first = SaveBuffer(persist_path=persist_path)
+    first.append(1, "q", "a")
+    first.drain(1)
+
+    second = SaveBuffer(persist_path=persist_path)
+    assert second.drain(1) == []

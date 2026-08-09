@@ -24,7 +24,16 @@ CONVERSATION_HISTORY_TURNS = 6
 # note under MURZIK_NOTES_DIR -- no keyword trigger needed, and nothing gets
 # written for a chat with no new messages in the window.
 PERIODIC_SAVE_INTERVAL_SECONDS = 3600
+# First run happens this soon after startup, not a full interval later --
+# during active development the bot restarts often, and each restart used to
+# push the first save another full hour out. Cheap to check even if nothing's
+# buffered yet (the job just skips).
+PERIODIC_SAVE_FIRST_DELAY_SECONDS = 60
 PERIODIC_SAVE_NOTHING_SENTINEL = "NOTHING_TO_SAVE"
+# SaveBuffer persists here so a bot restart before the next periodic save
+# can't silently lose buffered conversation -- it used to be in-process only
+# and got wiped by every restart, which is exactly what happened.
+SAVE_BUFFER_PATH = "data/save_buffer.json"
 
 # --- web tools (search / images / maps) ---
 # Bounds a runaway model tool-call loop -- after this many rounds,
@@ -137,9 +146,16 @@ SYSTEM_PROMPT = (
     "text automatically -- you can use it alone or alongside a short reply. Use it "
     "sparingly, only when it actually lands, not on every message.\n\n"
     "Conversations are periodically saved to permanent memory automatically in the "
-    "background -- you don't need to do anything for that, and you don't have any way "
-    "to trigger a save yourself. Never say \"noted\", \"saved\", or similar as if you "
-    "personally filed something away -- you didn't, that's handled separately.\n\n"
+    "background, on a timer entirely outside your control or awareness. You do NOT "
+    "know whether, when, or if anything from this conversation will actually get "
+    "saved -- you have zero visibility into that process. Never imply otherwise, in "
+    "ANY phrasing, direct or indirect: not \"noted\", not \"saved\", not \"it's in the "
+    "system\", not \"e notat\", not \"se salvează automat\", not \"adăugat în listă\", "
+    "not \"stai liniștit\" about persistence, nothing that suggests you personally "
+    "recorded something or that a save is confirmed or guaranteed. If Igor asks you "
+    "to remember something, just acknowledge what he said normally, like you would "
+    "any other message -- don't reassure him about persistence you have no way to "
+    "verify.\n\n"
     "You also have web search, image search, and Google Maps directions as tools. Use "
     "web search for anything not in Igor's notes, or that needs current/up-to-date "
     "information his notes wouldn't have. Use image search only when explicitly asked "
