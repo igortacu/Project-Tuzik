@@ -26,6 +26,15 @@ CONVERSATION_HISTORY_TURNS = 6
 PERIODIC_SAVE_INTERVAL_SECONDS = 3600
 PERIODIC_SAVE_NOTHING_SENTINEL = "NOTHING_TO_SAVE"
 
+# --- web tools (search / images / maps) ---
+# Bounds a runaway model tool-call loop -- after this many rounds,
+# generate_with_tools() returns whatever text the model has produced so far
+# instead of looping forever.
+MAX_TOOL_ROUNDS = 3
+# Hard cap on image_search results regardless of what the model requests, so
+# a single tool call can't spam the chat with dozens of photos.
+IMAGE_SEARCH_MAX_RESULTS = 3
+
 # --- embedding / storage (consumed once embedding/ and storage/ are implemented) ---
 EMBEDDING_MODEL_NAME = "all-MiniLM-L6-v2"
 VECTOR_STORE_PATH = "data/chroma"
@@ -130,13 +139,20 @@ SYSTEM_PROMPT = (
     "Conversations are periodically saved to permanent memory automatically in the "
     "background -- you don't need to do anything for that, and you don't have any way "
     "to trigger a save yourself. Never say \"noted\", \"saved\", or similar as if you "
-    "personally filed something away -- you didn't, that's handled separately."
+    "personally filed something away -- you didn't, that's handled separately.\n\n"
+    "You also have web search, image search, and Google Maps directions as tools. Use "
+    "web search for anything not in Igor's notes, or that needs current/up-to-date "
+    "information his notes wouldn't have. Use image search only when explicitly asked "
+    "for a photo or picture, never proactively. Use the maps tool when asked for "
+    "directions or how to get somewhere -- it returns a real, tappable link, not just "
+    "a description."
 )
 
 # --- environment-sourced secrets / machine-specific paths ---
 VAULT_PATH = os.environ.get("OBSIDIAN_VAULT_PATH")
 OPENROUTER_API_KEY = os.environ.get("OPENROUTER_API_KEY")
 TELEGRAM_BOT_TOKEN = os.environ.get("TELEGRAM_BOT_TOKEN")
+BRAVE_SEARCH_API_KEY = os.environ.get("BRAVE_SEARCH_API_KEY")
 
 # Comma-separated Telegram user ids allowed to query the bot, e.g. "12345678".
 # Empty/unset means nobody is authorized yet -- the bot tells any sender
