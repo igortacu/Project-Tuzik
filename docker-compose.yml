@@ -10,6 +10,23 @@ services:
     volumes:
       - ./data:/app/data
       - vault:/vault
+    depends_on:
+      - syncthing
+
+  syncthing:
+    image: syncthing/syncthing:latest
+    container_name: murzik_syncthing
+    restart: unless-stopped
+    hostname: murzik-vps
+    volumes:
+      - syncthing-config:/var/syncthing
+      - vault:/var/syncthing/vault
+    ports:
+      - "127.0.0.1:8384:8384"
+      - "22000:22000/tcp"
+      - "22000:22000/udp"
+      - "21027:21027/udp"
 
 volumes:
   vault:
+  syncthing-config:
