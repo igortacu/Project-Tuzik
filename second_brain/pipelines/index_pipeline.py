@@ -1,5 +1,14 @@
 """Wires ingestion -> parsing -> embedding -> storage. Runs on file change and
-on full rebuild. Shares no logic with query_pipeline.py beyond EmbeddingClient.
+on full rebuild.
+
+get_embedding_client/get_vector_store/get_bm25_index are process-wide
+singletons deliberately exposed (not underscore-private): query_pipeline.py
+reuses these exact same instances rather than constructing its own. BM25Index
+loads its records into memory once and never reloads from disk on its own --
+two separate instances backed by the same JSON file would silently diverge,
+so a write via one would be invisible to queries via the other for the
+lifetime of the process. Sharing one instance is what makes "write, then
+immediately query" work correctly within a single running bot.
 """
 
 from pathlib import Path
@@ -11,29 +20,26 @@ from second_brain.parsing.chunker import chunk_note
 from second_brain.storage.bm25_index import BM25Index
 from second_brain.storage.vector_store import VectorStore
 
-# Lazily-created, process-wide singletons: the embedding model and both store
-# connections are expensive to (re)open, and index_file/delete_file are meant
-# to be called repeatedly (once per debounced file-change event).
 _embedding_client: EmbeddingClient | None = None
 _vector_store: VectorStore | None = None
 _bm25_index: BM25Index | None = None
 
 
-def _get_embedding_client() -> EmbeddingClient:
+def get_embedding_client() -> EmbeddingClient:
     global _embedding_client
     if _embedding_client is None:
         _embedding_client = EmbeddingClient()
     return _embedding_client
 
 
-def _get_vector_store() -> VectorStore:
+def get_vector_store() -> VectorStore:
     global _vector_store
     if _vector_store is None:
         _vector_store = VectorStore()
     return _vector_store
 
 
-def _get_bm25_index() -> BM25Index:
+def get_bm25_index() -> BM25Index:
     global _bm25_index
     if _bm25_index is None:
         _bm25_index = BM25Index()
@@ -63,8 +69,8 @@ def index_file(path: Path, raw_text: str) -> None:
     chunks persist and silently degrade retrieval.
     """
     source_file = _relative_source(path)
-    vector_store = _get_vector_store()
-    bm25_index = _get_bm25_index()
+    vector_store = get_vector_store()
+    bm25_index = get_bm25_index()
 
     vector_store.delete_by_source(source_file)
     bm25_index.delete_by_source(source_file)
@@ -73,7 +79,7 @@ def index_file(path: Path, raw_text: str) -> None:
     if not chunks:
         return
 
-    vectors = _get_embedding_client().embed([chunk.text for chunk in chunks])
+    vectors = get_embedding_client().embed([chunk.text for chunk in chunks])
 
     for chunk, vector in zip(chunks, vectors):
         metadata = {
@@ -90,8 +96,8 @@ def index_file(path: Path, raw_text: str) -> None:
 def delete_file(path: Path) -> None:
     """Remove a deleted note's chunks from both stores."""
     source_file = _relative_source(path)
-    _get_vector_store().delete_by_source(source_file)
-    _get_bm25_index().delete_by_source(source_file)
+    get_vector_store().delete_by_source(source_file)
+    get_bm25_index().delete_by_source(source_file)
 
 
 def full_rebuild(vault_path: Path) -> None:

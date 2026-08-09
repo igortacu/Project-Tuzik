@@ -1,17 +1,19 @@
-"""Wires retrieval -> generation. Runs per user query. Shares no logic with
-index_pipeline.py beyond EmbeddingClient.
+"""Wires retrieval -> generation. Runs per user query.
+
+Deliberately reuses index_pipeline's get_embedding_client/get_vector_store/
+get_bm25_index singletons rather than constructing separate instances -- see
+the note at the top of index_pipeline.py for why (stale in-memory BM25
+records otherwise).
 """
 
 import re
 from typing import Any
 
 from second_brain import config
-from second_brain.embedding.client import EmbeddingClient
 from second_brain.generation.llm_client import LLMClient
 from second_brain.generation.prompt_builder import build_prompt
+from second_brain.pipelines import index_pipeline
 from second_brain.retrieval.retriever import Retriever
-from second_brain.storage.bm25_index import BM25Index
-from second_brain.storage.vector_store import VectorStore
 
 # Retrieval always returns top_k candidates regardless of relevance (no
 # confidence threshold anywhere in the pipeline), so a small free model
@@ -34,9 +36,9 @@ def _is_small_talk(query: str) -> bool:
     text = re.sub(r"\s+", " ", text)
     return text in _SMALL_TALK_PHRASES or len(text.split()) <= 1
 
-# Lazily-created, process-wide singletons -- same rationale as
-# pipelines/index_pipeline.py: the embedding model and store connections are
-# expensive to (re)open and answer_query() is meant to be called repeatedly.
+# Lazily-created singleton -- LLMClient is stateless per request (aside from
+# the rate-limit-streak counter) so there's no sharing concern here, unlike
+# the retriever's stores.
 _retriever: Retriever | None = None
 _llm_client: LLMClient | None = None
 
@@ -44,7 +46,11 @@ _llm_client: LLMClient | None = None
 def _get_retriever() -> Retriever:
     global _retriever
     if _retriever is None:
-        _retriever = Retriever(EmbeddingClient(), VectorStore(), BM25Index())
+        _retriever = Retriever(
+            index_pipeline.get_embedding_client(),
+            index_pipeline.get_vector_store(),
+            index_pipeline.get_bm25_index(),
+        )
     return _retriever
 
 
