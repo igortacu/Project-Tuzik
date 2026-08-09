@@ -24,8 +24,10 @@ def _cmd_index(args: argparse.Namespace) -> int:
 
 
 def _cmd_query(args: argparse.Namespace) -> int:
-    answer = query_pipeline.answer_query(args.question, top_k=args.top_k)
-    print(answer)
+    result = query_pipeline.answer_query(args.question, top_k=args.top_k)
+    print(result.text)
+    for image_url in result.image_urls:
+        print(f"[image] {image_url}")
     return 0
 
 

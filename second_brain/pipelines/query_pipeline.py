@@ -7,6 +7,7 @@ records otherwise).
 """
 
 import re
+from dataclasses import dataclass, field
 from typing import Any
 
 from second_brain import config
@@ -14,6 +15,12 @@ from second_brain.generation.llm_client import LLMClient
 from second_brain.generation.prompt_builder import build_prompt
 from second_brain.pipelines import index_pipeline
 from second_brain.retrieval.retriever import Retriever
+
+
+@dataclass
+class QueryResult:
+    text: str
+    image_urls: list[str] = field(default_factory=list)
 
 # Retrieval always returns top_k candidates regardless of relevance (no
 # confidence threshold anywhere in the pipeline), so a small free model
@@ -66,22 +73,27 @@ def answer_query(
     top_k: int | None = None,
     filters: dict[str, Any] | None = None,
     history: list[tuple[str, str]] | None = None,
-) -> str:
+) -> QueryResult:
     """Retrieve relevant chunks, build a prompt, and generate an answer.
 
-    Skips retrieval entirely for small-talk-shaped messages -- see
-    _is_small_talk. history is optional prior-turn context (see
-    bot/memory.py) -- this function stays stateless itself, the caller owns
-    conversation state and passes it in.
+    Skips retrieval *and* web tools for small-talk-shaped messages -- see
+    _is_small_talk -- there's no reason a "hello" should be able to trigger a
+    web search. history is optional prior-turn context (see bot/memory.py)
+    -- this function stays stateless itself, the caller owns conversation
+    state and passes it in.
     """
     if _is_small_talk(query):
-        return _get_llm_client().generate(
+        text = _get_llm_client().generate(
             f"Message: {query}\nReply:",
             system_prompt=config.SYSTEM_PROMPT,
             history=history,
         )
+        return QueryResult(text=text)
 
     resolved_top_k = top_k if top_k is not None else config.TOP_K
     chunks = _get_retriever().retrieve(query, resolved_top_k, filters)
     prompt = build_prompt(query, chunks)
-    return _get_llm_client().generate(prompt, system_prompt=config.SYSTEM_PROMPT, history=history)
+    result = _get_llm_client().generate_with_tools(
+        prompt, system_prompt=config.SYSTEM_PROMPT, history=history
+    )
+    return QueryResult(text=result.text, image_urls=result.image_urls)

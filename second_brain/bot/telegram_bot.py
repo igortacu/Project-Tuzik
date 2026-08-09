@@ -129,7 +129,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
     await update.message.chat.send_action(ChatAction.TYPING)
 
     try:
-        answer = await asyncio.to_thread(
+        result = await asyncio.to_thread(
             query_pipeline.answer_query, question, history=_memory.get(chat_id)
         )
     except Exception:
@@ -137,10 +137,15 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
         await update.message.reply_text("Something went wrong answering that -- check the logs.")
         return
 
-    remaining_text, sticker_category = _strip_sticker_marker(answer)
+    remaining_text, sticker_category = _strip_sticker_marker(result.text)
     await _reply_with_possible_sticker(update, remaining_text, sticker_category)
+    for image_url in result.image_urls:
+        try:
+            await update.message.reply_photo(photo=image_url)
+        except BadRequest:
+            logger.warning("Failed to send image from web search: %s", image_url)
 
-    final_text = remaining_text or answer
+    final_text = remaining_text or result.text
     _memory.append(chat_id, question, final_text)
     _save_buffer.append(chat_id, question, final_text)
 

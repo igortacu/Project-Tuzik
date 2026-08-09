@@ -3,9 +3,10 @@ source notes were retrieved vs expected, so retrieval quality can be measured
 before/after chunking or embedding changes.
 
 Deliberately talks to the Retriever directly rather than routing through
-pipelines.query_pipeline: answer_query() only returns a final answer string,
-with no way to inspect which source notes were actually used, and this is a
-retrieval-quality diagnostic that shouldn't need (or pay for) an LLM call.
+pipelines.query_pipeline: answer_query() returns the generated answer (and
+any web-search image URLs), not which source notes were actually used, and
+this is a retrieval-quality diagnostic that shouldn't need (or pay for) an
+LLM call.
 """
 
 from dataclasses import dataclass
