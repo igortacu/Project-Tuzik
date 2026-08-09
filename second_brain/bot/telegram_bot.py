@@ -267,6 +267,16 @@ def main() -> None:
         periodic_save_job,
         interval=config.PERIODIC_SAVE_INTERVAL_SECONDS,
         first=config.PERIODIC_SAVE_FIRST_DELAY_SECONDS,
+        # Without this, APScheduler silently drops (not just delays) a run
+        # that's late by more than its default misfire grace time -- which
+        # happens constantly on a laptop that sleeps: the whole process
+        # freezes during sleep, so the scheduled fire time passes while
+        # nothing is running, and on wake the job is considered "too late"
+        # and skipped entirely rather than run late. Confirmed via APScheduler's
+        # own warning log: "Run time of job ... was missed by 0:52:29". A late
+        # save is far better than a silently dropped one for something this
+        # infrequent, so allow unlimited lateness.
+        job_kwargs={"misfire_grace_time": None},
     )
 
     logger.info("Starting Telegram bot (long-polling)...")
