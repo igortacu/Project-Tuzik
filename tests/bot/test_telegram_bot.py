@@ -1,4 +1,5 @@
 import asyncio
+import logging
 from pathlib import Path
 from unittest.mock import patch
 
@@ -16,6 +17,29 @@ def test_strip_sticker_marker_strips_and_extracts_category():
     text, category = telegram_bot._strip_sticker_marker("Da, evident. [[sticker:eye_roll]]")
     assert text == "Da, evident."
     assert category == "eye_roll"
+
+
+def test_telegram_token_redaction_filter_scrubs_log_args():
+    class UrlLike:
+        def __str__(self):
+            return "https://api.telegram.org/bot123456:secret-token/getMe"
+
+    record = logging.LogRecord(
+        name="httpx",
+        level=logging.INFO,
+        pathname=__file__,
+        lineno=1,
+        msg='HTTP Request: POST %s "HTTP/1.1 200 OK"',
+        args=(UrlLike(),),
+        exc_info=None,
+    )
+
+    assert telegram_bot._TelegramTokenRedactionFilter().filter(record)
+    assert record.getMessage() == (
+        'HTTP Request: POST https://api.telegram.org/bot[REDACTED]/getMe '
+        '"HTTP/1.1 200 OK"'
+    )
+    assert telegram_bot._redact_telegram_tokens("Starting Telegram bot") == "Starting Telegram bot"
 
 
 def test_compress_and_save_chat_skips_when_nothing_to_save():

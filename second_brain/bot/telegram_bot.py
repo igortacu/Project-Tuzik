@@ -34,6 +34,7 @@ from second_brain.pipelines import index_pipeline, query_pipeline
 logger = logging.getLogger(__name__)
 
 _MAX_MESSAGE_LENGTH = 4000  # Telegram's hard cap is 4096; leave some margin
+_TELEGRAM_TOKEN_IN_URL_RE = re.compile(r"bot\d+:[^/\s]+")
 
 # Matches the marker the model can put in its reply to trigger a sticker --
 # see config.STICKERS and config.SYSTEM_PROMPT.
@@ -57,6 +58,32 @@ _START_MESSAGE = (
     f"Hey, I'm *{config.ASSISTANT_NAME}* — {config.OWNER_NAME}'s personal second brain "
     "on legs. Ask me anything about your notes and I'll dig it up (with receipts)."
 )
+
+
+def _redact_telegram_tokens(value):
+    if isinstance(value, str):
+        text = value
+    else:
+        text = str(value)
+    if "bot" in text:
+        return _TELEGRAM_TOKEN_IN_URL_RE.sub("bot[REDACTED]", text)
+    return value
+
+
+class _TelegramTokenRedactionFilter(logging.Filter):
+    def filter(self, record: logging.LogRecord) -> bool:
+        record.msg = _redact_telegram_tokens(record.msg)
+        if isinstance(record.args, tuple):
+            record.args = tuple(_redact_telegram_tokens(arg) for arg in record.args)
+        elif isinstance(record.args, dict):
+            record.args = {key: _redact_telegram_tokens(value) for key, value in record.args.items()}
+        return True
+
+
+def _install_log_redaction() -> None:
+    redaction_filter = _TelegramTokenRedactionFilter()
+    for logger_name in ("httpx", "telegram", "telegram.ext", __name__):
+        logging.getLogger(logger_name).addFilter(redaction_filter)
 
 
 def _is_authorized(user_id: int) -> bool:
@@ -241,6 +268,7 @@ async def periodic_save_job(context: ContextTypes.DEFAULT_TYPE) -> None:
 
 def main() -> None:
     logging.basicConfig(level=logging.INFO)
+    _install_log_redaction()
 
     _warn_if_model_unknown()
     _start_vault_watcher()
