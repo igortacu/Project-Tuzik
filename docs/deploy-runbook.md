@@ -50,7 +50,9 @@ bind-mounts the Mac vault path.
    ```
 
    `OBSIDIAN_VAULT_PATH` does not need to be set for the VPS. Compose sets it
-   to `/vault` for the `murzik` container.
+   to `/vault` for the `murzik` container. Compose also sets
+   `TZ=Europe/Chisinau` so Murzik's saved note timestamps use Moldova local
+   time, including daylight saving changes.
 
 4. Prepare the persistent data directory for the non-root container user:
 

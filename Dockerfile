@@ -5,6 +5,10 @@ WORKDIR /app
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends tzdata \
+    && rm -rf /var/lib/apt/lists/*
+
 COPY second_brain ./second_brain
 
 # Drop root: the persisted mount points are created and chowned here so a
