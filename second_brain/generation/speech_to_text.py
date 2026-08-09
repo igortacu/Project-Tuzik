@@ -37,6 +37,11 @@ def transcribe_audio(audio_bytes: bytes, filename: str = "voice.ogg") -> str:
     try:
         response.raise_for_status()
     except requests.HTTPError as exc:
+        if response.status_code == 401:
+            raise SpeechToTextError(
+                "Groq rejected GROQ_API_KEY. Use a GroqCloud key from "
+                "https://console.groq.com/keys, not a Grok/xAI key."
+            ) from exc
         raise SpeechToTextError(f"Groq transcription request failed: {exc}") from exc
 
     try:

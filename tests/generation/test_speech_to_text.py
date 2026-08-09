@@ -1,6 +1,7 @@
 from unittest.mock import Mock, patch
 
 import pytest
+import requests
 
 from second_brain import config
 from second_brain.generation import speech_to_text
@@ -49,5 +50,18 @@ def test_transcribe_audio_rejects_empty_transcription(monkeypatch):
     with (
         patch("requests.post", return_value=_fake_response({"text": "  "})),
         pytest.raises(speech_to_text.SpeechToTextError, match="empty"),
+    ):
+        speech_to_text.transcribe_audio(b"audio")
+
+
+def test_transcribe_audio_explains_unauthorized_key(monkeypatch):
+    monkeypatch.setattr(config, "GROQ_API_KEY", "wrong-key")
+    response = Mock()
+    response.status_code = 401
+    response.raise_for_status.side_effect = requests.HTTPError(response=response)
+
+    with (
+        patch("requests.post", return_value=response),
+        pytest.raises(speech_to_text.SpeechToTextError, match="GroqCloud key"),
     ):
         speech_to_text.transcribe_audio(b"audio")
