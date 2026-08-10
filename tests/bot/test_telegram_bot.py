@@ -21,6 +21,22 @@ def test_strip_sticker_marker_strips_and_extracts_category():
     assert category == "eye_roll"
 
 
+def test_sanitize_assistant_text_for_storage_removes_raw_dsml_block():
+    raw = (
+        "before\n"
+        '< | DSML | tool_calls>< | DSML | invoke name="web_search">'
+        '< | DSML | parameter name="query" string="true">x</ | DSML | parameter>'
+        "</ | DSML | invoke></ | DSML | tool_calls>\n"
+        "after"
+    )
+
+    assert telegram_bot._sanitize_assistant_text_for_storage(raw) == "before\n\nafter"
+
+
+def test_sanitize_assistant_text_for_storage_suppresses_malformed_dsml():
+    assert "DSML" not in telegram_bot._sanitize_assistant_text_for_storage("< | DSML | broken>")
+
+
 def test_telegram_token_redaction_filter_scrubs_log_args():
     class UrlLike:
         def __str__(self):
@@ -160,6 +176,43 @@ def test_answer_message_forwards_chat_id_to_answer_query():
         asyncio.run(telegram_bot._answer_message(_FakeUpdate(), "hi"))
 
     assert mock_answer.call_args.kwargs["chat_id"] == 777
+
+
+def test_answer_message_stores_sanitized_assistant_text():
+    class _FakeChat:
+        async def send_action(self, *a, **k):
+            pass
+
+    class _FakeMessage:
+        chat = _FakeChat()
+
+        async def reply_text(self, *a, **k):
+            pass
+
+    class _FakeUpdate:
+        effective_chat = type("C", (), {"id": 777})()
+        message = _FakeMessage()
+
+    raw_reply = (
+        "visible answer\n"
+        '< | DSML | tool_calls>< | DSML | invoke name="web_search">'
+        '< | DSML | parameter name="query" string="true">x</ | DSML | parameter>'
+        "</ | DSML | invoke></ | DSML | tool_calls>"
+    )
+    fake_result = type("R", (), {"text": raw_reply, "image_urls": []})()
+
+    with (
+        patch(
+            "second_brain.bot.telegram_bot.query_pipeline.answer_query",
+            return_value=fake_result,
+        ),
+        patch.object(telegram_bot._memory, "append") as mock_memory_append,
+        patch.object(telegram_bot._save_buffer, "append") as mock_save_buffer_append,
+    ):
+        asyncio.run(telegram_bot._answer_message(_FakeUpdate(), "hi"))
+
+    mock_memory_append.assert_called_once_with(777, "hi", "visible answer")
+    mock_save_buffer_append.assert_called_once_with(777, "hi", "visible answer")
 
 
 def test_reminder_dispatch_job_sends_and_removes_due_reminders(tmp_path):

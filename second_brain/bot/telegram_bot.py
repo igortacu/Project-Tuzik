@@ -41,8 +41,17 @@ _TELEGRAM_TOKEN_IN_URL_RE = re.compile(r"bot\d+:[^/\s]+")
 # Matches the marker the model can put in its reply to trigger a sticker --
 # see config.STICKERS and config.SYSTEM_PROMPT.
 _STICKER_MARKER_RE = re.compile(r"\[\[sticker:(\w+)\]\]")
+_DSML_TOOL_CALLS_BLOCK_RE = re.compile(
+    r"<\s*\|\s*DSML\s*\|\s*tool_calls\s*>.*?</\s*\|\s*DSML\s*\|\s*tool_calls\s*>",
+    re.DOTALL | re.IGNORECASE,
+)
+_DSML_INVOKE_BLOCK_RE = re.compile(
+    r"<\s*\|\s*DSML\s*\|\s*invoke\b.*?</\s*\|\s*DSML\s*\|\s*invoke\s*>",
+    re.DOTALL | re.IGNORECASE,
+)
+_RAW_DSML_MARKUP_RE = re.compile(r"<\s*\|\s*DSML\s*\|", re.IGNORECASE)
 
-# In-process only, per chat -- cleared on restart. See bot/memory.py.
+# Short-term bounded context, persisted per chat. See bot/memory.py.
 _memory = ConversationMemory(config.CONVERSATION_HISTORY_TURNS)
 
 # Unbounded per-chat accumulation, drained by the periodic save job below.
@@ -127,6 +136,17 @@ def _strip_sticker_marker(text: str) -> tuple[str, str | None]:
     return remaining_text, (match.group(1) if match else None)
 
 
+def _sanitize_assistant_text_for_storage(text: str) -> str:
+    """Removes leaked tool-call markup before persisting chat context."""
+    cleaned = _DSML_TOOL_CALLS_BLOCK_RE.sub("", text)
+    cleaned = _DSML_INVOKE_BLOCK_RE.sub("", cleaned)
+    cleaned = re.sub(r"[ \t]{2,}", " ", cleaned).strip()
+    if _RAW_DSML_MARKUP_RE.search(cleaned):
+        logger.warning("Suppressing raw DSML markup from persisted assistant context")
+        return "N-am reusit sa generez un raspuns afisabil."
+    return cleaned
+
+
 async def _reply_with_possible_sticker(
     update: Update, remaining_text: str, sticker_category: str | None
 ) -> None:
@@ -173,7 +193,7 @@ async def _answer_message(update: Update, question: str) -> None:
         except BadRequest:
             logger.warning("Failed to send image from web search: %s", image_url)
 
-    final_text = remaining_text or result.text
+    final_text = _sanitize_assistant_text_for_storage(remaining_text or result.text)
     _memory.append(chat_id, question, final_text)
     _save_buffer.append(chat_id, question, final_text)
 
