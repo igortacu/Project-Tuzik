@@ -286,19 +286,21 @@ async def _compress_and_save_chat(chat_id: int, turns: list[tuple[str, str]]) ->
 
 
 async def periodic_save_job(context: ContextTypes.DEFAULT_TYPE) -> None:
-    """Runs every config.PERIODIC_SAVE_INTERVAL_SECONDS. Drains each chat's
-    SaveBuffer and compresses+saves it -- chats with nothing buffered (no
-    new messages since the last run) are skipped entirely: no save, no
-    empty note.
+    """Runs every config.PERIODIC_SAVE_INTERVAL_SECONDS. Compresses+saves
+    each chat's SaveBuffer and clears it only after that succeeds -- chats
+    with nothing buffered (no new messages since the last run) are skipped
+    entirely: no save, no empty note.
     """
     for chat_id in list(_save_buffer.chat_ids()):
-        turns = _save_buffer.drain(chat_id)
+        turns = _save_buffer.peek(chat_id)
         if not turns:
             continue
         try:
             await _compress_and_save_chat(chat_id, turns)
         except Exception:
             logger.exception("Periodic save failed for chat_id=%s", chat_id)
+            continue
+        _save_buffer.clear(chat_id)
 
 
 async def reminder_dispatch_job(context: ContextTypes.DEFAULT_TYPE) -> None:

@@ -100,7 +100,7 @@ def test_periodic_save_job_skips_chats_with_nothing_buffered(tmp_path):
         asyncio.run(telegram_bot.periodic_save_job(context=None))
 
     assert calls == [(1, [("real question", "real answer")])]
-    # draining is destructive -- a second run with nothing new does nothing
+    # successful save clears the buffered turn -- a second run with nothing new does nothing
     calls.clear()
     with (
         patch("second_brain.bot.telegram_bot._save_buffer", buffer),
@@ -111,6 +111,25 @@ def test_periodic_save_job_skips_chats_with_nothing_buffered(tmp_path):
     ):
         asyncio.run(telegram_bot.periodic_save_job(context=None))
     assert calls == []
+
+
+def test_periodic_save_job_keeps_buffer_when_compress_fails(tmp_path):
+    buffer = SaveBuffer(persist_path=str(tmp_path / "save_buffer.json"))
+    buffer.append(1, "important question", "important answer")
+
+    async def _failing_compress_and_save(chat_id, turns):
+        raise RuntimeError("temporary failure")
+
+    with (
+        patch("second_brain.bot.telegram_bot._save_buffer", buffer),
+        patch(
+            "second_brain.bot.telegram_bot._compress_and_save_chat",
+            side_effect=_failing_compress_and_save,
+        ),
+    ):
+        asyncio.run(telegram_bot.periodic_save_job(context=None))
+
+    assert buffer.peek(1) == [("important question", "important answer")]
 
 
 def test_answer_message_forwards_chat_id_to_answer_query():

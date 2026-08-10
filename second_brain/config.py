@@ -15,8 +15,11 @@ CHUNK_HEADING_MAX_LEVEL = 3  # H1-H3 are chunk boundaries; H4-H6 stay inline
 TOP_K = 5
 RRF_K = 60
 
-# --- conversation memory (in-process, per Telegram chat, cleared on restart) ---
+# --- conversation memory (bounded, per Telegram chat, survives restarts) ---
 CONVERSATION_HISTORY_TURNS = 6
+# Short-term context is persisted so Docker/bot restarts do not make Murzik
+# forget the last few turns. Still bounded by CONVERSATION_HISTORY_TURNS.
+CONVERSATION_MEMORY_PATH = "data/conversation_memory.json"
 
 # --- periodic conversation save (replaces explicit "remember this" commands) ---
 # Every PERIODIC_SAVE_INTERVAL_SECONDS, each chat with new messages since the
