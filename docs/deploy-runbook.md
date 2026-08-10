@@ -27,17 +27,20 @@ bind-mounts the Mac vault path.
    cd /opt/murzik
    ```
 
-   For future updates:
-
-   ```bash
-   git pull
-   ```
+   `docker-compose.override.yml` is gitignored, so a fresh clone will never
+   bring the local Mac bind-mount override onto the VPS. Compose will only
+   see `docker-compose.yml`. See `docker-compose.override.yml.example` in
+   the repo for what the local-only override looks like.
 
 3. Create `/opt/murzik/.env` with the real production values:
 
    ```bash
    nano /opt/murzik/.env
+   chmod 600 /opt/murzik/.env
    ```
+
+   The `chmod` restricts the file to the owner only, since it holds live
+   secrets.
 
    Required values:
 
@@ -60,6 +63,11 @@ bind-mounts the Mac vault path.
    mkdir -p /opt/murzik/data
    chown -R 1000:1000 /opt/murzik/data
    ```
+
+   Both `murzik` and `syncthing` run as UID/GID 1000 (the `syncthing`
+   service sets this explicitly via `PUID`/`PGID` in `docker-compose.yml`),
+   so the shared `vault` named volume and this bind-mounted `data`
+   directory stay consistently owned across both containers.
 
 5. Start the stack:
 
@@ -119,6 +127,19 @@ bind-mounts the Mac vault path.
 7. Wait for initial sync to complete in the Syncthing UI. Once complete, the
    Docker `vault` volume contains the vault, mounted into `murzik` at `/vault`.
 
+8. Once the initial sync finishes, restart the bot so it indexes the
+   now-populated vault:
+
+   ```bash
+   ssh root@37.27.32.169 'cd /opt/murzik && docker compose restart murzik'
+   ```
+
+   This one-time restart is only needed for the initial sync. Ongoing edits
+   to the vault after this point are picked up live by the `VaultWatcher`
+   already running inside the bot, which logs
+   `Re-indexed external vault change: ...` per changed file -- no separate
+   reindex command is needed for anything after the initial sync.
+
 ## Firewall
 
 Keep Syncthing's web UI private. The compose file binds port `8384` to
@@ -166,3 +187,7 @@ After deploy and initial vault sync:
    ```bash
    ssh root@37.27.32.169 'docker restart murzik_bot'
    ```
+
+   "Recovers" means: wait about 10 seconds after the restart, then send
+   Murzik a real Telegram message and confirm it sends back a normal reply,
+   confirming the restart didn't break long-polling.
