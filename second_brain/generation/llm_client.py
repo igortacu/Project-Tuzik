@@ -10,6 +10,7 @@ import json
 import logging
 import re
 from dataclasses import dataclass, field
+from datetime import datetime
 
 import requests
 
@@ -49,12 +50,29 @@ def _build_messages(
     prompt: str, system_prompt: str | None, history: list[tuple[str, str]] | None
 ) -> list[dict]:
     messages = []
-    if system_prompt:
-        messages.append({"role": "system", "content": system_prompt})
+    effective_system_prompt = _build_system_prompt(system_prompt)
+    if effective_system_prompt:
+        messages.append({"role": "system", "content": effective_system_prompt})
     for role, content in history or ():
         messages.append({"role": role, "content": content})
     messages.append({"role": "user", "content": prompt})
     return messages
+
+
+def _current_time_context() -> str:
+    now = datetime.now().astimezone()
+    timezone_name = now.tzname() or "local time"
+    return (
+        "Current local date/time for relative dates and reminders: "
+        f"{now.isoformat(timespec='seconds')} ({timezone_name})."
+    )
+
+
+def _build_system_prompt(system_prompt: str | None) -> str:
+    time_context = _current_time_context()
+    if not system_prompt:
+        return time_context
+    return f"{system_prompt}\n\n{time_context}"
 
 
 def _call_openrouter_message(messages: list[dict], tools: list[dict] | None = None) -> dict:

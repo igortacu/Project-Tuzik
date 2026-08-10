@@ -173,6 +173,29 @@ def test_execute_tool_set_reminder():
     assert "abc123" in result
 
 
+def test_execute_tool_set_reminder_normalizes_offset_timestamp(monkeypatch):
+    import time
+    from datetime import datetime
+
+    monkeypatch.setenv("TZ", "Europe/Chisinau")
+    if hasattr(time, "tzset"):
+        time.tzset()
+    with patch("second_brain.agent.tools.get_reminder_store") as mock_get_store:
+        mock_store = mock_get_store.return_value
+        mock_store.add.return_value = type("R", (), {"id": "abc123"})()
+
+        tools.execute_tool(
+            "set_reminder",
+            {"message": "take out the roast", "fire_at": "2026-08-10T15:20:00+03:00"},
+            [],
+            chat_id=1,
+        )
+
+    mock_store.add.assert_called_once_with(
+        1, datetime(2026, 8, 10, 15, 20), "take out the roast"
+    )
+
+
 def test_execute_tool_set_reminder_invalid_timestamp():
     result = tools.execute_tool(
         "set_reminder",
@@ -181,6 +204,16 @@ def test_execute_tool_set_reminder_invalid_timestamp():
         chat_id=1,
     )
     assert "valid time" in result.lower() or "invalid" in result.lower()
+
+
+def test_execute_tool_set_reminder_missing_message():
+    result = tools.execute_tool(
+        "set_reminder",
+        {"fire_at": "2026-08-10T15:20:00"},
+        [],
+        chat_id=1,
+    )
+    assert "missing required argument" in result
 
 
 def test_execute_tool_set_reminder_missing_chat_id():

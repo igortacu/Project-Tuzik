@@ -8,6 +8,13 @@ from second_brain.agent import maps, reminders as reminders_module, vault_writer
 
 get_reminder_store = reminders_module.get_reminder_store
 
+
+def _parse_reminder_fire_at(value: str) -> datetime:
+    fire_at = datetime.fromisoformat(value)
+    if fire_at.tzinfo is not None:
+        fire_at = fire_at.astimezone().replace(tzinfo=None)
+    return fire_at
+
 TOOLS_SCHEMA = [
     {
         "type": "function",
@@ -216,10 +223,13 @@ def execute_tool(
         if chat_id is None:
             return "Reminders aren't available: no chat id for this request."
         try:
-            fire_at = datetime.fromisoformat(arguments["fire_at"])
-        except (KeyError, ValueError):
+            fire_at = _parse_reminder_fire_at(arguments["fire_at"])
+            message = arguments["message"]
+        except KeyError as exc:
+            return f"Reminder set failed: missing required argument {exc.args[0]!r}."
+        except ValueError:
             return "That's not a valid time -- fire_at must be an ISO 8601 timestamp."
-        reminder = get_reminder_store().add(chat_id, fire_at, arguments["message"])
+        reminder = get_reminder_store().add(chat_id, fire_at, message)
         return f"Reminder set (id: {reminder.id})."
 
     if name == "list_reminders":

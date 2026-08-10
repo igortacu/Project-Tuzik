@@ -37,6 +37,10 @@ def _fake_tool_call(call_id: str, name: str, arguments: dict) -> dict:
 
 def test_generate_without_history_sends_only_system_and_user_messages(monkeypatch):
     monkeypatch.setattr(config, "OPENROUTER_API_KEY", "fake-key")
+    monkeypatch.setattr(
+        "second_brain.generation.llm_client._current_time_context",
+        lambda: "Current local date/time: test-now",
+    )
     client = LLMClient()
 
     with patch("requests.post", return_value=_fake_ok_response("ok")) as mock_post:
@@ -44,7 +48,7 @@ def test_generate_without_history_sends_only_system_and_user_messages(monkeypatc
 
     sent_messages = mock_post.call_args.kwargs["json"]["messages"]
     assert sent_messages == [
-        {"role": "system", "content": "be nice"},
+        {"role": "system", "content": "be nice\n\nCurrent local date/time: test-now"},
         {"role": "user", "content": "question"},
     ]
 
@@ -53,6 +57,10 @@ def test_generate_with_history_inserts_prior_turns_between_system_and_current_pr
     monkeypatch,
 ):
     monkeypatch.setattr(config, "OPENROUTER_API_KEY", "fake-key")
+    monkeypatch.setattr(
+        "second_brain.generation.llm_client._current_time_context",
+        lambda: "Current local date/time: test-now",
+    )
     client = LLMClient()
     history = [("user", "q1"), ("assistant", "a1")]
 
@@ -61,10 +69,28 @@ def test_generate_with_history_inserts_prior_turns_between_system_and_current_pr
 
     sent_messages = mock_post.call_args.kwargs["json"]["messages"]
     assert sent_messages == [
-        {"role": "system", "content": "be nice"},
+        {"role": "system", "content": "be nice\n\nCurrent local date/time: test-now"},
         {"role": "user", "content": "q1"},
         {"role": "assistant", "content": "a1"},
         {"role": "user", "content": "q2"},
+    ]
+
+
+def test_generate_without_system_prompt_still_sends_current_time(monkeypatch):
+    monkeypatch.setattr(config, "OPENROUTER_API_KEY", "fake-key")
+    monkeypatch.setattr(
+        "second_brain.generation.llm_client._current_time_context",
+        lambda: "Current local date/time: test-now",
+    )
+    client = LLMClient()
+
+    with patch("requests.post", return_value=_fake_ok_response("ok")) as mock_post:
+        client.generate("question")
+
+    sent_messages = mock_post.call_args.kwargs["json"]["messages"]
+    assert sent_messages == [
+        {"role": "system", "content": "Current local date/time: test-now"},
+        {"role": "user", "content": "question"},
     ]
 
 
