@@ -188,3 +188,21 @@ def test_generate_without_tools_omits_tool_choice(monkeypatch):
 
     assert "tool_choice" not in mock_post.call_args.kwargs["json"]
     assert "tools" not in mock_post.call_args.kwargs["json"]
+
+
+def test_generate_with_tools_forwards_chat_id_to_execute_tool(monkeypatch):
+    monkeypatch.setattr(config, "OPENROUTER_API_KEY", "fake-key")
+    client = LLMClient()
+
+    tool_call_response = _fake_message_response(
+        _fake_tool_call("c1", "web_search", {"query": "x"})
+    )
+    final_response = _fake_message_response({"role": "assistant", "content": "done"})
+
+    with (
+        patch("requests.post", side_effect=[tool_call_response, final_response]),
+        patch("second_brain.agent.tools.execute_tool", return_value="result") as mock_execute,
+    ):
+        client.generate_with_tools("question", chat_id=999)
+
+    mock_execute.assert_called_once_with("web_search", {"query": "x"}, [], chat_id=999)

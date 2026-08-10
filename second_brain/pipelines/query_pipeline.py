@@ -73,6 +73,7 @@ def answer_query(
     top_k: int | None = None,
     filters: dict[str, Any] | None = None,
     history: list[tuple[str, str]] | None = None,
+    chat_id: int | None = None,
 ) -> QueryResult:
     """Retrieve relevant chunks, build a prompt, and generate an answer.
 
@@ -94,6 +95,6 @@ def answer_query(
     chunks = _get_retriever().retrieve(query, resolved_top_k, filters)
     prompt = build_prompt(query, chunks)
     result = _get_llm_client().generate_with_tools(
-        prompt, system_prompt=config.SYSTEM_PROMPT, history=history
+        prompt, system_prompt=config.SYSTEM_PROMPT, history=history, chat_id=chat_id
     )
     return QueryResult(text=result.text, image_urls=result.image_urls)

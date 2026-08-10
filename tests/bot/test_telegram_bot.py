@@ -109,3 +109,33 @@ def test_periodic_save_job_skips_chats_with_nothing_buffered(tmp_path):
     ):
         asyncio.run(telegram_bot.periodic_save_job(context=None))
     assert calls == []
+
+
+def test_answer_message_forwards_chat_id_to_answer_query():
+    class _FakeChat:
+        async def send_action(self, *a, **k):
+            pass
+
+    class _FakeMessage:
+        chat = _FakeChat()
+
+        async def reply_text(self, *a, **k):
+            pass
+
+    class _FakeUpdate:
+        effective_chat = type("C", (), {"id": 777})()
+        message = _FakeMessage()
+
+    fake_result = type("R", (), {"text": "an answer", "image_urls": []})()
+
+    with (
+        patch(
+            "second_brain.bot.telegram_bot.query_pipeline.answer_query",
+            return_value=fake_result,
+        ) as mock_answer,
+        patch.object(telegram_bot._memory, "append"),
+        patch.object(telegram_bot._save_buffer, "append"),
+    ):
+        asyncio.run(telegram_bot._answer_message(_FakeUpdate(), "hi"))
+
+    assert mock_answer.call_args.kwargs["chat_id"] == 777

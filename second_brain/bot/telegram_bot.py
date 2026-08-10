@@ -154,7 +154,10 @@ async def _answer_message(update: Update, question: str) -> None:
 
     try:
         result = await asyncio.to_thread(
-            query_pipeline.answer_query, question, history=_memory.get(chat_id)
+            query_pipeline.answer_query,
+            question,
+            history=_memory.get(chat_id),
+            chat_id=chat_id,
         )
     except Exception:
         logger.exception("answer_query failed for question: %r", question)

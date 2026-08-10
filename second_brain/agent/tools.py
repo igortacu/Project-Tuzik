@@ -109,7 +109,9 @@ TOOLS_SCHEMA = [
 ]
 
 
-def execute_tool(name: str, arguments: dict, image_urls_out: list[str]) -> str:
+def execute_tool(
+    name: str, arguments: dict, image_urls_out: list[str], chat_id: int | None = None
+) -> str:
     """Runs one tool call, returns the text fed back to the model.
 
     image_search additionally appends its URLs to image_urls_out -- a side

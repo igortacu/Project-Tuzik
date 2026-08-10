@@ -136,3 +136,10 @@ def test_execute_tool_edit_vault_note_missing_argument():
     )
 
     assert "missing required argument" in result
+
+
+def test_execute_tool_accepts_optional_chat_id_without_breaking_existing_tools():
+    result = tools.execute_tool(
+        "get_directions_link", {"destination": "Airport"}, [], chat_id=42
+    )
+    assert "https://www.google.com/maps/dir/" in result

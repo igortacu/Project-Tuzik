@@ -98,7 +98,7 @@ def _call_openrouter(
     return _strip_thinking(content)
 
 
-def _run_tool_loop(messages: list[dict]) -> ToolResult:
+def _run_tool_loop(messages: list[dict], chat_id: int | None = None) -> ToolResult:
     """Runs the OpenAI/OpenRouter tool-calling protocol: send messages with
     TOOLS_SCHEMA attached; if the model calls a tool, execute it, append the
     result, and loop -- capped at config.MAX_TOOL_ROUNDS rounds, after which
@@ -121,7 +121,9 @@ def _run_tool_loop(messages: list[dict]) -> ToolResult:
                 arguments = json.loads(call["function"]["arguments"])
             except (json.JSONDecodeError, TypeError):
                 arguments = {}
-            result_text = tools_module.execute_tool(name, arguments, image_urls)
+            result_text = tools_module.execute_tool(
+                name, arguments, image_urls, chat_id=chat_id
+            )
             messages.append(
                 {"role": "tool", "tool_call_id": call["id"], "content": result_text}
             )
@@ -189,13 +191,14 @@ class LLMClient:
         prompt: str,
         system_prompt: str | None = None,
         history: list[tuple[str, str]] | None = None,
+        chat_id: int | None = None,
     ) -> ToolResult:
         if not config.OPENROUTER_API_KEY:
             raise GenerationFailedError("OPENROUTER_API_KEY not set in .env")
 
         messages = _build_messages(prompt, system_prompt, history)
         try:
-            result = _run_tool_loop(messages)
+            result = _run_tool_loop(messages, chat_id=chat_id)
             self._consecutive_rate_limits = 0
             logger.info("llm request served by model=%s (tools)", config.OPENROUTER_MODEL_ID)
             return result
