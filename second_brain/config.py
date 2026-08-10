@@ -34,6 +34,9 @@ PERIODIC_SAVE_NOTHING_SENTINEL = "NOTHING_TO_SAVE"
 # can't silently lose buffered conversation -- it used to be in-process only
 # and got wiped by every restart, which is exactly what happened.
 SAVE_BUFFER_PATH = "data/save_buffer.json"
+# Reminders: persisted like SaveBuffer so a bot restart can't silently drop
+# a pending reminder -- see agent/reminders.py.
+REMINDER_STORE_PATH = "data/reminders.json"
 
 # --- web tools (search / images / maps) ---
 # Bounds a runaway model tool-call loop -- after this many rounds,
