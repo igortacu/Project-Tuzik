@@ -28,10 +28,54 @@ _RATE_LIMIT_STATUS_CODE = 429
 # Strip it as a safety net -- the system prompt asks the model not to do this
 # in the first place, but this covers the cases where it doesn't listen.
 _THINKING_BLOCK_RE = re.compile(r"<(think|thinking|reasoning)>.*?</\1>", re.DOTALL | re.IGNORECASE)
+_DSML_INVOKE_RE = re.compile(
+    r"<\s*\|\s*DSML\s*\|\s*invoke\s+name=[\"'](?P<name>[\w_]+)[\"']\s*>"
+    r"(?P<body>.*?)"
+    r"</\s*\|\s*DSML\s*\|\s*invoke\s*>",
+    re.DOTALL | re.IGNORECASE,
+)
+_DSML_PARAMETER_RE = re.compile(
+    r"<\s*\|\s*DSML\s*\|\s*parameter\s+name=[\"'](?P<name>[\w_]+)[\"']"
+    r"(?:\s+string=[\"']true[\"'])?\s*>"
+    r"(?P<value>.*?)"
+    r"</\s*\|\s*DSML\s*\|\s*parameter\s*>",
+    re.DOTALL | re.IGNORECASE,
+)
+_RAW_TOOL_MARKUP_RE = re.compile(r"<\s*\|\s*DSML\s*\|", re.IGNORECASE)
 
 
 def _strip_thinking(text: str) -> str:
     return _THINKING_BLOCK_RE.sub("", text).strip()
+
+
+def _parse_dsml_tool_calls(content: str) -> list[dict]:
+    """Best-effort parser for models that leak DSML tool calls as text.
+
+    OpenRouter sometimes returns raw DSML-ish markup in message.content even
+    with tool_choice="auto". Convert that markup into the same shape as
+    structured OpenAI tool calls so the normal execution loop can handle it.
+    """
+    calls = []
+    for index, match in enumerate(_DSML_INVOKE_RE.finditer(content), start=1):
+        arguments = {
+            param.group("name"): param.group("value").strip()
+            for param in _DSML_PARAMETER_RE.finditer(match.group("body"))
+        }
+        calls.append(
+            {
+                "id": f"raw_dsml_{index}",
+                "type": "function",
+                "function": {
+                    "name": match.group("name"),
+                    "arguments": json.dumps(arguments),
+                },
+            }
+        )
+    return calls
+
+
+def _contains_raw_tool_markup(content: str) -> bool:
+    return bool(_RAW_TOOL_MARKUP_RE.search(content))
 
 
 class GenerationFailedError(RuntimeError):
@@ -130,7 +174,16 @@ def _run_tool_loop(messages: list[dict], chat_id: int | None = None) -> ToolResu
         tool_calls = message.get("tool_calls")
         if not tool_calls:
             content = message.get("content") or ""
-            return ToolResult(text=_strip_thinking(content), image_urls=image_urls)
+            tool_calls = _parse_dsml_tool_calls(content)
+            if not tool_calls:
+                if _contains_raw_tool_markup(content):
+                    logger.warning("Model returned unparseable raw tool markup; suppressing it")
+                    return ToolResult(
+                        text="N-am reusit sa rulez tool-ul corect. Mai incearca o data, te rog.",
+                        image_urls=image_urls,
+                    )
+                return ToolResult(text=_strip_thinking(content), image_urls=image_urls)
+            message = {"role": "assistant", "content": None, "tool_calls": tool_calls}
 
         messages.append(message)
         for call in tool_calls:

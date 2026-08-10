@@ -128,6 +128,50 @@ def test_generate_with_tools_executes_tool_and_returns_final_text(monkeypatch):
     assert any(m.get("role") == "tool" for m in second_call_messages)
 
 
+def test_generate_with_tools_executes_raw_dsml_tool_markup(monkeypatch):
+    monkeypatch.setattr(config, "OPENROUTER_API_KEY", "fake-key")
+    client = LLMClient()
+
+    raw_tool_response = _fake_message_response(
+        {
+            "role": "assistant",
+            "content": (
+                '< | DSML | tool_calls>\n'
+                '< | DSML | invoke name="web_search">\n'
+                '< | DSML | parameter name="query" string="true">'
+                "Moldova capital gains tax"
+                "</ | DSML | parameter>\n"
+                "</ | DSML | invoke>\n"
+                "</ | DSML | tool_calls>"
+            ),
+        }
+    )
+    final_response = _fake_message_response({"role": "assistant", "content": "found it"})
+
+    with (
+        patch("requests.post", side_effect=[raw_tool_response, final_response]),
+        patch("second_brain.agent.tools.execute_tool", return_value="search result") as mock_execute,
+    ):
+        result = client.generate_with_tools("search this")
+
+    assert result.text == "found it"
+    mock_execute.assert_called_once_with(
+        "web_search", {"query": "Moldova capital gains tax"}, [], chat_id=None
+    )
+
+
+def test_generate_with_tools_suppresses_unparseable_raw_dsml_markup(monkeypatch):
+    monkeypatch.setattr(config, "OPENROUTER_API_KEY", "fake-key")
+    client = LLMClient()
+    response = _fake_message_response({"role": "assistant", "content": "< | DSML | broken>"})
+
+    with patch("requests.post", return_value=response):
+        result = client.generate_with_tools("question")
+
+    assert "DSML" not in result.text
+    assert "tool" in result.text
+
+
 def test_generate_with_tools_image_search_populates_image_urls(monkeypatch):
     monkeypatch.setattr(config, "OPENROUTER_API_KEY", "fake-key")
     client = LLMClient()
