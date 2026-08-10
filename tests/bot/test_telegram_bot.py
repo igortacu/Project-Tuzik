@@ -1,8 +1,10 @@
 import asyncio
 import logging
+from datetime import datetime, timedelta
 from pathlib import Path
-from unittest.mock import patch
+from unittest.mock import AsyncMock, patch
 
+from second_brain.agent.reminders import ReminderStore
 from second_brain.bot import telegram_bot
 from second_brain.bot.memory import SaveBuffer
 
@@ -139,3 +141,52 @@ def test_answer_message_forwards_chat_id_to_answer_query():
         asyncio.run(telegram_bot._answer_message(_FakeUpdate(), "hi"))
 
     assert mock_answer.call_args.kwargs["chat_id"] == 777
+
+
+def test_reminder_dispatch_job_sends_and_removes_due_reminders(tmp_path):
+    store = ReminderStore(persist_path=str(tmp_path / "reminders.json"))
+    due = store.add(1, datetime.now() - timedelta(minutes=1), "due reminder")
+    store.add(1, datetime.now() + timedelta(hours=1), "not due yet")
+
+    fake_context = type("Ctx", (), {"bot": type("Bot", (), {})()})()
+    fake_context.bot.send_message = AsyncMock()
+
+    with patch("second_brain.bot.telegram_bot.get_reminder_store", return_value=store):
+        asyncio.run(telegram_bot.reminder_dispatch_job(fake_context))
+
+    fake_context.bot.send_message.assert_called_once_with(chat_id=1, text="due reminder")
+    remaining_ids = [r.id for r in store.list_for_chat(1)]
+    assert due.id not in remaining_ids
+    assert len(remaining_ids) == 1
+
+
+def test_reminder_dispatch_job_skips_when_nothing_due(tmp_path):
+    store = ReminderStore(persist_path=str(tmp_path / "reminders.json"))
+    store.add(1, datetime.now() + timedelta(hours=1), "not due yet")
+
+    fake_context = type("Ctx", (), {"bot": type("Bot", (), {})()})()
+    fake_context.bot.send_message = AsyncMock()
+
+    with patch("second_brain.bot.telegram_bot.get_reminder_store", return_value=store):
+        asyncio.run(telegram_bot.reminder_dispatch_job(fake_context))
+
+    fake_context.bot.send_message.assert_not_called()
+    assert len(store.list_for_chat(1)) == 1
+
+
+def test_reminder_dispatch_job_continues_after_one_send_failure(tmp_path):
+    store = ReminderStore(persist_path=str(tmp_path / "reminders.json"))
+    store.add(1, datetime.now() - timedelta(minutes=1), "fails to send")
+    store.add(2, datetime.now() - timedelta(minutes=1), "sends fine")
+
+    fake_context = type("Ctx", (), {"bot": type("Bot", (), {})()})()
+    fake_context.bot.send_message = AsyncMock(side_effect=[Exception("boom"), None])
+
+    with patch("second_brain.bot.telegram_bot.get_reminder_store", return_value=store):
+        asyncio.run(telegram_bot.reminder_dispatch_job(fake_context))
+
+    assert fake_context.bot.send_message.call_count == 2
+    # the one that failed to send is still pending (not removed); the one
+    # that sent successfully is gone
+    remaining_messages = {r.message for r in store.list_for_chat(1) + store.list_for_chat(2)}
+    assert remaining_messages == {"fails to send"}

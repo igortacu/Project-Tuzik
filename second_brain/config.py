@@ -37,6 +37,11 @@ SAVE_BUFFER_PATH = "data/save_buffer.json"
 # Reminders: persisted like SaveBuffer so a bot restart can't silently drop
 # a pending reminder -- see agent/reminders.py.
 REMINDER_STORE_PATH = "data/reminders.json"
+# How often reminder_dispatch_job polls for due reminders. A reminder that
+# becomes due while the bot is down still fires on the next tick after
+# restart, late rather than lost -- see misfire_grace_time on this job's
+# registration in bot/telegram_bot.py.
+REMINDER_DISPATCH_INTERVAL_SECONDS = 30
 
 # --- web tools (search / images / maps) ---
 # Bounds a runaway model tool-call loop -- after this many rounds,

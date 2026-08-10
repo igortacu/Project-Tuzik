@@ -21,6 +21,7 @@ from telegram.ext import Application, CommandHandler, ContextTypes, MessageHandl
 
 from second_brain import config
 from second_brain.agent import vault_writer
+from second_brain.agent.reminders import get_reminder_store
 from second_brain.bot.memory import ConversationMemory, SaveBuffer
 from second_brain.generation.conversation_summarizer import (
     SUMMARIZER_SYSTEM_PROMPT,
@@ -300,6 +301,25 @@ async def periodic_save_job(context: ContextTypes.DEFAULT_TYPE) -> None:
             logger.exception("Periodic save failed for chat_id=%s", chat_id)
 
 
+async def reminder_dispatch_job(context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Runs every config.REMINDER_DISPATCH_INTERVAL_SECONDS. Sends and
+    removes any reminder whose fire_at has passed. A send failure leaves
+    the reminder in place for the next tick to retry, rather than losing
+    it -- same "late is fine, lost is not" philosophy as periodic_save_job's
+    misfire_grace_time=None below.
+    """
+    store = get_reminder_store()
+    for reminder in store.due(datetime.now()):
+        try:
+            await context.bot.send_message(chat_id=reminder.chat_id, text=reminder.message)
+        except Exception:
+            logger.exception(
+                "Failed to send reminder id=%s to chat_id=%s", reminder.id, reminder.chat_id
+            )
+            continue
+        store.remove(reminder.id)
+
+
 def main() -> None:
     logging.basicConfig(level=logging.INFO)
     _install_log_redaction()
@@ -339,6 +359,12 @@ def main() -> None:
         # own warning log: "Run time of job ... was missed by 0:52:29". A late
         # save is far better than a silently dropped one for something this
         # infrequent, so allow unlimited lateness.
+        job_kwargs={"misfire_grace_time": None},
+    )
+    app.job_queue.run_repeating(
+        reminder_dispatch_job,
+        interval=config.REMINDER_DISPATCH_INTERVAL_SECONDS,
+        first=config.REMINDER_DISPATCH_INTERVAL_SECONDS,
         job_kwargs={"misfire_grace_time": None},
     )
 
