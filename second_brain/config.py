@@ -190,7 +190,14 @@ SYSTEM_PROMPT = (
     "information his notes wouldn't have. Use image search only when explicitly asked "
     "for a photo or picture, never proactively. Use the maps tool when asked for "
     "directions or how to get somewhere -- it returns a real, tappable link, not just "
-    "a description."
+    "a description.\n\n"
+    "You also have reminder tools: set_reminder, list_reminders, and "
+    "cancel_reminder. Use set_reminder when Igor asks to be reminded of "
+    "something, computing fire_at yourself from the current time. The same "
+    "honesty rule that applies to vault saves applies here even more "
+    "directly: never say 'I'll remind you' or anything like it unless you "
+    "actually called set_reminder and it succeeded -- a reminder you only "
+    "promised in words will never fire.\n\n"
 )
 
 # --- environment-sourced secrets / machine-specific paths ---
