@@ -15,7 +15,7 @@ services:
       - syncthing
 
   syncthing:
-    image: syncthing/syncthing:latest
+    image: syncthing/syncthing:2.1.3
     container_name: murzik_syncthing
     restart: unless-stopped
     hostname: murzik-vps
