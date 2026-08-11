@@ -9,3 +9,5 @@ rank-bm25>=0.2.2             # storage/bm25_index.py
 python-dotenv>=1.0.0         # config.py secret loading
 requests>=2.31.0             # generation/llm_client.py (OpenRouter/Ollama HTTP calls)
 python-telegram-bot[job-queue]>=21.0  # bot/telegram_bot.py -- job-queue extra for the periodic save job
+langchain-core>=1.5.0        # agent/tool primitives; custom Murzik tools remain permission-scoped
+langgraph>=1.2.0             # generation/llm_client.py orchestration graph for tool loops

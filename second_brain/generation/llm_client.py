@@ -11,8 +11,10 @@ import logging
 import re
 from dataclasses import dataclass, field
 from datetime import datetime
+from typing import Literal, TypedDict
 
 import requests
+from langgraph.graph import END, START, StateGraph
 
 from second_brain import config
 from second_brain.agent import tools as tools_module
@@ -101,6 +103,16 @@ class ToolResult:
     image_urls: list[str] = field(default_factory=list)
 
 
+class _ToolLoopState(TypedDict):
+    messages: list[dict]
+    image_urls: list[str]
+    chat_id: int | None
+    rounds: int
+    pending_tool_calls: list[dict]
+    result_text: str
+    has_tool_calls: bool
+
+
 def _build_messages(
     prompt: str, system_prompt: str | None, history: list[tuple[str, str]] | None
 ) -> list[dict]:
@@ -171,48 +183,110 @@ def _call_openrouter(
     return _strip_thinking(content)
 
 
-def _run_tool_loop(messages: list[dict], chat_id: int | None = None) -> ToolResult:
-    """Runs the OpenAI/OpenRouter tool-calling protocol: send messages with
-    TOOLS_SCHEMA attached; if the model calls a tool, execute it, append the
-    result, and loop -- capped at config.MAX_TOOL_ROUNDS rounds, after which
-    one final request is made with no tools attached to force a plain text
-    answer, so a model that won't stop calling tools can't loop forever.
-    """
-    image_urls: list[str] = []
+def _agent_graph_node(state: _ToolLoopState) -> _ToolLoopState:
+    """Calls the model once; LangGraph decides whether tools run next."""
+    if state["rounds"] >= config.MAX_TOOL_ROUNDS:
+        final_message = _call_openrouter_message(state["messages"], tools=None)
+        content = final_message.get("content") or ""
+        return {
+            **state,
+            "pending_tool_calls": [],
+            "result_text": _strip_thinking(content),
+            "has_tool_calls": False,
+        }
 
-    for _round in range(config.MAX_TOOL_ROUNDS):
-        message = _call_openrouter_message(messages, tools=tools_module.TOOLS_SCHEMA)
-        tool_calls = message.get("tool_calls")
+    message = _call_openrouter_message(state["messages"], tools=tools_module.TOOLS_SCHEMA)
+    tool_calls = message.get("tool_calls")
+    if not tool_calls:
+        content = message.get("content") or ""
+        tool_calls = _parse_dsml_tool_calls(content)
         if not tool_calls:
-            content = message.get("content") or ""
-            tool_calls = _parse_dsml_tool_calls(content)
-            if not tool_calls:
-                if _contains_raw_tool_markup(content):
-                    logger.warning("Model returned unparseable raw tool markup; suppressing it")
-                    return ToolResult(
-                        text="N-am reusit sa rulez tool-ul corect. Mai incearca o data, te rog.",
-                        image_urls=image_urls,
-                    )
-                return ToolResult(text=_strip_thinking(content), image_urls=image_urls)
-            message = {"role": "assistant", "content": None, "tool_calls": tool_calls}
+            if _contains_raw_tool_markup(content):
+                logger.warning("Model returned unparseable raw tool markup; suppressing it")
+                return {
+                    **state,
+                    "pending_tool_calls": [],
+                    "result_text": (
+                        "N-am reusit sa rulez tool-ul corect. Mai incearca o data, te rog."
+                    ),
+                    "has_tool_calls": False,
+                }
+            return {
+                **state,
+                "pending_tool_calls": [],
+                "result_text": _strip_thinking(content),
+                "has_tool_calls": False,
+            }
+        message = {"role": "assistant", "content": None, "tool_calls": tool_calls}
 
-        messages.append(message)
-        for call in tool_calls:
-            name = call["function"]["name"]
-            try:
-                arguments = json.loads(call["function"]["arguments"])
-            except (json.JSONDecodeError, TypeError):
-                arguments = {}
-            result_text = tools_module.execute_tool(
-                name, arguments, image_urls, chat_id=chat_id
-            )
-            messages.append(
-                {"role": "tool", "tool_call_id": call["id"], "content": result_text}
-            )
+    return {
+        **state,
+        "messages": state["messages"] + [message],
+        "pending_tool_calls": tool_calls,
+        "rounds": state["rounds"] + 1,
+        "has_tool_calls": True,
+    }
 
-    final_message = _call_openrouter_message(messages, tools=None)
-    content = final_message.get("content") or ""
-    return ToolResult(text=_strip_thinking(content), image_urls=image_urls)
+
+def _tool_graph_node(state: _ToolLoopState) -> _ToolLoopState:
+    """Executes pending tool calls and appends tool-result messages."""
+    messages = list(state["messages"])
+    image_urls = list(state["image_urls"])
+    for call in state["pending_tool_calls"]:
+        name = call["function"]["name"]
+        try:
+            arguments = json.loads(call["function"]["arguments"])
+        except (json.JSONDecodeError, TypeError):
+            arguments = {}
+        result_text = tools_module.execute_tool(
+            name, arguments, image_urls, chat_id=state["chat_id"]
+        )
+        messages.append({"role": "tool", "tool_call_id": call["id"], "content": result_text})
+
+    return {
+        **state,
+        "messages": messages,
+        "image_urls": image_urls,
+        "pending_tool_calls": [],
+    }
+
+
+def _route_after_agent(state: _ToolLoopState) -> Literal["tools", "__end__"]:
+    return "tools" if state["has_tool_calls"] else END
+
+
+def _build_tool_graph():
+    graph = StateGraph(_ToolLoopState)
+    graph.add_node("agent", _agent_graph_node)
+    graph.add_node("tools", _tool_graph_node)
+    graph.add_edge(START, "agent")
+    graph.add_conditional_edges("agent", _route_after_agent, {"tools": "tools", END: END})
+    graph.add_edge("tools", "agent")
+    return graph.compile()
+
+
+_TOOL_GRAPH = _build_tool_graph()
+
+
+def _run_tool_loop(messages: list[dict], chat_id: int | None = None) -> ToolResult:
+    """Runs the tool-calling protocol via LangGraph.
+
+    The graph has two nodes: "agent" calls OpenRouter, and "tools" executes
+    vetted Murzik tools. It loops until the model returns final text or
+    config.MAX_TOOL_ROUNDS is reached, then forces one final no-tools answer.
+    """
+    final_state = _TOOL_GRAPH.invoke(
+        {
+            "messages": messages,
+            "image_urls": [],
+            "chat_id": chat_id,
+            "rounds": 0,
+            "pending_tool_calls": [],
+            "result_text": "",
+            "has_tool_calls": False,
+        }
+    )
+    return ToolResult(text=final_state["result_text"], image_urls=final_state["image_urls"])
 
 
 class LLMClient:
