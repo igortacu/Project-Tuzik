@@ -4,7 +4,27 @@ from unittest.mock import Mock, patch
 import requests
 
 from second_brain import config
-from second_brain.generation.llm_client import LLMClient
+from second_brain.generation.llm_client import LLMClient, _strip_thinking
+
+
+def test_strip_thinking_removes_leftover_html_xml_tags():
+    assert _strip_thinking("hello <b>world</b>") == "hello world"
+
+
+def test_strip_thinking_removes_self_closing_tag():
+    assert _strip_thinking("before<br/>after") == "beforeafter"
+
+
+def test_strip_thinking_does_not_touch_math_comparisons():
+    # "<" and ">" used as comparison operators must not be treated as tags --
+    # a real tag's first character after < (or </) is always a letter.
+    assert _strip_thinking("if x < 5 and y > 3") == "if x < 5 and y > 3"
+
+
+def test_strip_thinking_does_not_touch_markdown_brackets():
+    assert _strip_thinking("[[sticker:eye_roll]] stays intact") == (
+        "[[sticker:eye_roll]] stays intact"
+    )
 
 
 def _fake_ok_response(content: str) -> Mock:

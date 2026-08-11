@@ -28,6 +28,15 @@ _RATE_LIMIT_STATUS_CODE = 429
 # Strip it as a safety net -- the system prompt asks the model not to do this
 # in the first place, but this covers the cases where it doesn't listen.
 _THINKING_BLOCK_RE = re.compile(r"<(think|thinking|reasoning)>.*?</\1>", re.DOTALL | re.IGNORECASE)
+# General safety net for any other XML/HTML-shaped tag that leaks into a
+# reply -- rather than adding a new one-off regex every time the model
+# drifts into a new markup format (DSML tool calls, stray HTML, etc.), strip
+# anything tag-shaped after the specific, meaningful markup (thinking
+# blocks, DSML tool calls -- parsed before this ever runs) has already been
+# handled. Requires a letter right after < or </, so "x < 5 and y > 3"
+# (math, not a tag) is left untouched -- a real tag's first character is
+# always a letter.
+_STRAY_TAG_RE = re.compile(r"</?[a-zA-Z][a-zA-Z0-9_:-]*(?:\s[^<>]*)?/?>")
 _DSML_INVOKE_RE = re.compile(
     r"<\s*\|\s*DSML\s*\|\s*invoke\s+name=[\"'](?P<name>[\w_]+)[\"']\s*>"
     r"(?P<body>.*?)"
@@ -45,7 +54,9 @@ _RAW_TOOL_MARKUP_RE = re.compile(r"<\s*\|\s*DSML\s*\|", re.IGNORECASE)
 
 
 def _strip_thinking(text: str) -> str:
-    return _THINKING_BLOCK_RE.sub("", text).strip()
+    text = _THINKING_BLOCK_RE.sub("", text)
+    text = _STRAY_TAG_RE.sub("", text)
+    return re.sub(r"[ \t]{2,}", " ", text).strip()
 
 
 def _parse_dsml_tool_calls(content: str) -> list[dict]:
