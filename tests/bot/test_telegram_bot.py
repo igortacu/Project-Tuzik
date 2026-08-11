@@ -21,6 +21,20 @@ def test_strip_sticker_marker_strips_and_extracts_category():
     assert category == "eye_roll"
 
 
+def test_strip_sticker_marker_accepts_bang_format_with_space():
+    text, category = telegram_bot._strip_sticker_marker(
+        "Acuma nu mai ai scuze. !sticker: done_with_you"
+    )
+    assert text == "Acuma nu mai ai scuze."
+    assert category == "done_with_you"
+
+
+def test_strip_sticker_marker_accepts_bang_format_without_space():
+    text, category = telegram_bot._strip_sticker_marker("Cu placere, sefu'. !sticker:cheers")
+    assert text == "Cu placere, sefu'."
+    assert category == "cheers"
+
+
 def test_sanitize_assistant_text_for_storage_removes_raw_dsml_block():
     raw = (
         "before\n"

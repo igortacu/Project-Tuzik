@@ -39,8 +39,12 @@ _MAX_MESSAGE_LENGTH = 4000  # Telegram's hard cap is 4096; leave some margin
 _TELEGRAM_TOKEN_IN_URL_RE = re.compile(r"bot\d+:[^/\s]+")
 
 # Matches the marker the model can put in its reply to trigger a sticker --
-# see config.STICKERS and config.SYSTEM_PROMPT.
-_STICKER_MARKER_RE = re.compile(r"\[\[sticker:(\w+)\]\]")
+# see config.STICKERS and config.SYSTEM_PROMPT. The canonical format is
+# [[sticker:CATEGORY]], but the model sometimes drifts to a "!sticker:
+# CATEGORY" shorthand instead (observed live) -- accept both rather than
+# leaking the literal marker text into a real reply, same defensive
+# philosophy as the DSML tool-call parsing below.
+_STICKER_MARKER_RE = re.compile(r"\[\[sticker:(\w+)\]\]|!sticker:\s*(\w+)", re.IGNORECASE)
 _DSML_TOOL_CALLS_BLOCK_RE = re.compile(
     r"<\s*\|\s*DSML\s*\|\s*tool_calls\s*>.*?</\s*\|\s*DSML\s*\|\s*tool_calls\s*>",
     re.DOTALL | re.IGNORECASE,
@@ -129,11 +133,13 @@ async def _reply_in_chunks(update: Update, text: str) -> None:
 
 def _strip_sticker_marker(text: str) -> tuple[str, str | None]:
     """Splits a raw model reply into (visible_text, sticker_category).
-    sticker_category is None if the reply had no [[sticker:CATEGORY]] marker.
+    sticker_category is None if the reply had no recognized sticker marker
+    (either [[sticker:CATEGORY]] or the "!sticker: CATEGORY" drift format).
     """
     match = _STICKER_MARKER_RE.search(text)
     remaining_text = re.sub(r"[ \t]{2,}", " ", _STICKER_MARKER_RE.sub("", text)).strip()
-    return remaining_text, (match.group(1) if match else None)
+    category = (match.group(1) or match.group(2)) if match else None
+    return remaining_text, category
 
 
 def _sanitize_assistant_text_for_storage(text: str) -> str:
