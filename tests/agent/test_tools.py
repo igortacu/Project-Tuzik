@@ -88,23 +88,60 @@ def test_execute_tool_get_directions_link():
 def test_execute_tool_append_vault_note():
     with patch(
         "second_brain.agent.vault_writer.append_note",
-        return_value="/vault/Murzik Notes/project_updates.md",
+        return_value="/vault/Murzik Notes/Projects/project_updates.md",
     ) as mock_append:
         result = tools.execute_tool(
             "append_vault_note",
-            {"filename": "project_updates.md", "content": "Docker is deployed."},
+            {
+                "category": "Projects",
+                "filename": "project_updates.md",
+                "content": "Docker is deployed.",
+            },
             [],
         )
 
-    mock_append.assert_called_once_with("project_updates.md", "Docker is deployed.")
+    mock_append.assert_called_once_with(
+        "Projects", "project_updates.md", "Docker is deployed.", None
+    )
     assert "Saved to vault note" in result
     assert "project_updates.md" in result
 
 
-def test_execute_tool_append_vault_note_missing_argument():
+def test_execute_tool_append_vault_note_with_tags():
+    with patch(
+        "second_brain.agent.vault_writer.append_note",
+        return_value="/vault/Murzik Notes/Finance/investing.md",
+    ) as mock_append:
+        tools.execute_tool(
+            "append_vault_note",
+            {
+                "category": "Finance",
+                "filename": "investing.md",
+                "content": "ETF plan.",
+                "tags": ["etf", "investing"],
+            },
+            [],
+        )
+
+    mock_append.assert_called_once_with(
+        "Finance", "investing.md", "ETF plan.", ["etf", "investing"]
+    )
+
+
+def test_execute_tool_append_vault_note_missing_category():
     result = tools.execute_tool(
         "append_vault_note",
-        {"filename": "project_updates.md"},
+        {"filename": "project_updates.md", "content": "x"},
+        [],
+    )
+
+    assert "missing required argument" in result
+
+
+def test_execute_tool_append_vault_note_missing_content():
+    result = tools.execute_tool(
+        "append_vault_note",
+        {"category": "Misc", "filename": "project_updates.md"},
         [],
     )
 

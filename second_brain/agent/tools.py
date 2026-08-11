@@ -4,6 +4,7 @@ execute_tool() which actually runs one when the model calls it.
 
 from datetime import datetime
 
+from second_brain import config
 from second_brain.agent import maps, reminders as reminders_module, vault_writer, web_search
 
 get_reminder_store = reminders_module.get_reminder_store
@@ -68,23 +69,33 @@ TOOLS_SCHEMA = [
         "function": {
             "name": "append_vault_note",
             "description": "Create or append a Markdown note under Igor's restricted "
-            "Murzik Notes/ vault folder. Use only when Igor explicitly asks to "
-            "remember, save, note down, or update notes with new information. "
-            "This cannot edit or delete arbitrary existing vault files.",
+            "Murzik Notes/ vault folder, organized by category. Use only when Igor "
+            "explicitly asks to remember, save, note down, or update notes with new "
+            "information. This cannot edit or delete arbitrary existing vault files.",
             "parameters": {
                 "type": "object",
                 "properties": {
+                    "category": {
+                        "type": "string",
+                        "enum": config.VAULT_CATEGORIES,
+                        "description": "Pick the closest fit; use Misc if nothing fits.",
+                    },
                     "filename": {
                         "type": "string",
-                        "description": "Markdown filename under Murzik Notes/, e.g. "
-                        "project_updates.md. No absolute paths or ../ traversal.",
+                        "description": "Bare Markdown filename (no folders), e.g. "
+                        "investment-plans.md. No path separators or ../ traversal.",
                     },
                     "content": {
                         "type": "string",
                         "description": "Concise Markdown content to append.",
                     },
+                    "tags": {
+                        "type": "array",
+                        "items": {"type": "string"},
+                        "description": "Optional extra tags beyond the category itself.",
+                    },
                 },
-                "required": ["filename", "content"],
+                "required": ["category", "filename", "content"],
             },
         },
     },
@@ -201,7 +212,12 @@ def execute_tool(
 
     if name == "append_vault_note":
         try:
-            path = vault_writer.append_note(arguments["filename"], arguments["content"])
+            path = vault_writer.append_note(
+                arguments["category"],
+                arguments["filename"],
+                arguments["content"],
+                arguments.get("tags"),
+            )
         except KeyError as exc:
             return f"Vault write failed: missing required argument {exc.args[0]!r}."
         except vault_writer.VaultWriteError as exc:
