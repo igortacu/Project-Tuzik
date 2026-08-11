@@ -4,6 +4,8 @@ from datetime import datetime, timedelta
 from pathlib import Path
 from unittest.mock import AsyncMock, patch
 
+from telegram.error import BadRequest
+
 from second_brain.agent.reminders import ReminderStore
 from second_brain.bot import telegram_bot
 from second_brain.bot.memory import SaveBuffer
@@ -33,6 +35,26 @@ def test_strip_sticker_marker_accepts_bang_format_without_space():
     text, category = telegram_bot._strip_sticker_marker("Cu placere, sefu'. !sticker:cheers")
     assert text == "Cu placere, sefu'."
     assert category == "cheers"
+
+
+def test_strip_sticker_marker_normalizes_hyphenated_category():
+    text, category = telegram_bot._strip_sticker_marker("Gata. !sticker: done-with-you")
+    assert text == "Gata."
+    assert category == "done_with_you"
+
+
+def test_reply_with_possible_sticker_does_not_raise_when_telegram_rejects_sticker():
+    class _FakeMessage:
+        reply_sticker = AsyncMock(side_effect=BadRequest("wrong file identifier"))
+        reply_text = AsyncMock()
+
+    class _FakeUpdate:
+        message = _FakeMessage()
+
+    asyncio.run(telegram_bot._reply_with_possible_sticker(_FakeUpdate(), "", "shrug"))
+
+    _FakeMessage.reply_sticker.assert_awaited_once()
+    _FakeMessage.reply_text.assert_not_awaited()
 
 
 def test_sanitize_assistant_text_for_storage_removes_raw_dsml_block():

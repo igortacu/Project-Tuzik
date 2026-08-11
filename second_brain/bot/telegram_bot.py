@@ -45,7 +45,9 @@ _TELEGRAM_TOKEN_IN_URL_RE = re.compile(r"bot\d+:[^/\s]+")
 # CATEGORY" shorthand instead (observed live) -- accept both rather than
 # leaking the literal marker text into a real reply, same defensive
 # philosophy as the DSML tool-call parsing below.
-_STICKER_MARKER_RE = re.compile(r"\[\[sticker:(\w+)\]\]|!sticker:\s*(\w+)", re.IGNORECASE)
+_STICKER_MARKER_RE = re.compile(
+    r"\[\[sticker:([a-zA-Z0-9_-]+)\]\]|!sticker:\s*([a-zA-Z0-9_-]+)", re.IGNORECASE
+)
 _DSML_TOOL_CALLS_BLOCK_RE = re.compile(
     r"<\s*\|\s*DSML\s*\|\s*tool_calls\s*>.*?</\s*\|\s*DSML\s*\|\s*tool_calls\s*>",
     re.DOTALL | re.IGNORECASE,
@@ -139,7 +141,7 @@ def _strip_sticker_marker(text: str) -> tuple[str, str | None]:
     """
     match = _STICKER_MARKER_RE.search(text)
     remaining_text = re.sub(r"[ \t]{2,}", " ", _STICKER_MARKER_RE.sub("", text)).strip()
-    category = (match.group(1) or match.group(2)) if match else None
+    category = (match.group(1) or match.group(2)).replace("-", "_") if match else None
     return remaining_text, category
 
 
@@ -165,7 +167,10 @@ async def _reply_with_possible_sticker(
 
     file_id = config.STICKERS.get(sticker_category)
     if file_id:
-        await update.message.reply_sticker(file_id)
+        try:
+            await update.message.reply_sticker(file_id)
+        except BadRequest:
+            logger.warning("Failed to send sticker category=%r", sticker_category)
     else:
         logger.warning("Model requested unknown sticker category: %r", sticker_category)
 
