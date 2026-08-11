@@ -185,3 +185,33 @@ def test_edit_existing_note_requires_non_empty_old_text(_isolated_vault):
 
     with pytest.raises(vault_writer.VaultWriteError, match="non-empty"):
         vault_writer.edit_existing_note("project.md", "", "new")
+
+
+def test_edit_existing_note_bumps_updated_when_frontmatter_present(_isolated_vault, monkeypatch):
+    path = vault_writer.append_note("Projects", "status.md", "Status: in progress.")
+
+    # Simulate the note having been created on an earlier day so the bump
+    # is actually observable rather than a no-op equal-to-today comparison.
+    metadata, body = _read_frontmatter(path)
+    metadata["created"] = "2020-01-01"
+    metadata["updated"] = "2020-01-01"
+    path.write_text(vault_writer._render_frontmatter(metadata) + body, encoding="utf-8")
+
+    vault_writer.edit_existing_note(f"{config.MURZIK_NOTES_DIR}/Projects/status.md", "in progress", "done")
+
+    new_metadata, new_body = _read_frontmatter(path)
+    assert new_metadata["updated"] == date.today().isoformat()
+    assert new_metadata["created"] == "2020-01-01"
+    assert "Status: done." in new_body
+
+
+def test_edit_existing_note_leaves_notes_without_frontmatter_untouched(_isolated_vault):
+    tmp_path, _ = _isolated_vault
+    path = tmp_path / "plain.md"
+    path.write_text("Docker is wanted.\n", encoding="utf-8")
+
+    vault_writer.edit_existing_note("plain.md", "wanted", "done")
+
+    result = path.read_text(encoding="utf-8")
+    assert result == "Docker is done.\n"
+    assert not result.startswith("---")
