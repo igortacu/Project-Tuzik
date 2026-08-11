@@ -35,6 +35,7 @@ SUMMARIZER_SYSTEM_PROMPT = (
 )
 
 _DEFAULT_CATEGORY = "Misc"
+_STRUCTURED_HEADER_KEYS = {"CATEGORY", "FILENAME", "TAGS"}
 
 
 @dataclass
@@ -66,6 +67,38 @@ def _fallback_filename() -> str:
     return f"note-{datetime.now().strftime('%Y%m%d-%H%M%S')}.md"
 
 
+def _split_structured_note(text: str) -> tuple[str, str] | None:
+    """Splits only the explicit summarizer header/body format.
+
+    A prose horizontal rule in free-form fallback content must not be treated
+    as the structured delimiter, or the content before it gets silently lost.
+    """
+    lines = text.split("\n")
+    for index, line in enumerate(lines):
+        if not re.fullmatch(r"-{3,}[ \t]*", line):
+            continue
+
+        header_lines = lines[:index]
+        if not header_lines:
+            return None
+
+        saw_header = False
+        for header_line in header_lines:
+            if not header_line.strip():
+                continue
+            key, sep, _value = header_line.partition(":")
+            if not sep or key.strip().upper() not in _STRUCTURED_HEADER_KEYS:
+                return None
+            saw_header = True
+
+        if not saw_header:
+            return None
+
+        return "\n".join(header_lines), "\n".join(lines[index + 1 :])
+
+    return None
+
+
 def parse_summarizer_output(compressed: str) -> SummarizedNote:
     """Parses the CATEGORY/FILENAME/TAGS/--- format SUMMARIZER_SYSTEM_PROMPT
     instructs the model to produce. Never raises -- a malformed or
@@ -74,8 +107,8 @@ def parse_summarizer_output(compressed: str) -> SummarizedNote:
     the save entirely.
     """
     text = compressed.strip().replace("\r\n", "\n").replace("\r", "\n")
-    parts = re.split(r"\n-{3,}[ \t]*\n", text, maxsplit=1)
-    if len(parts) < 2:
+    parts = _split_structured_note(text)
+    if parts is None:
         return SummarizedNote(
             category=_DEFAULT_CATEGORY,
             filename=_fallback_filename(),

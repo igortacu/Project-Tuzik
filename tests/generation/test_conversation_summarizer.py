@@ -109,3 +109,13 @@ def test_parse_summarizer_output_matches_category_case_insensitively():
     compressed = "CATEGORY: finance\nFILENAME: topic.md\n---\ncontent"
     note = parse_summarizer_output(compressed)
     assert note.category == "Finance"
+
+
+def test_parse_summarizer_output_does_not_lose_content_before_a_prose_horizontal_rule():
+    compressed = (
+        "Igor decided to move to Spain.\n\n---\n\nHe also bought a car."
+    )
+    note = parse_summarizer_output(compressed)
+    assert note.category == "Misc"
+    assert "Igor decided to move to Spain." in note.content
+    assert "He also bought a car." in note.content
