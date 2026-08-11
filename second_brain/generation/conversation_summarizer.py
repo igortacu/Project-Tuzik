@@ -6,6 +6,7 @@ its own, narrower system prompt rather than reusing Murzik's. Used by the
 periodic vault-save job in bot/telegram_bot.py.
 """
 
+import re
 from dataclasses import dataclass, field
 from datetime import datetime
 
@@ -72,16 +73,18 @@ def parse_summarizer_output(compressed: str) -> SummarizedNote:
     timestamp-derived filename, the raw text as content) rather than losing
     the save entirely.
     """
-    text = compressed.strip()
-    header, separator, body = text.partition("\n---\n")
-    if not separator:
+    text = compressed.strip().replace("\r\n", "\n").replace("\r", "\n")
+    parts = re.split(r"\n-{3,}[ \t]*\n", text, maxsplit=1)
+    if len(parts) < 2:
         return SummarizedNote(
             category=_DEFAULT_CATEGORY,
             filename=_fallback_filename(),
             tags=[_DEFAULT_CATEGORY.lower()],
             content=text,
         )
+    header, body = parts
 
+    category_lookup = {c.lower(): c for c in config.VAULT_CATEGORIES}
     category = _DEFAULT_CATEGORY
     filename = _fallback_filename()
     tags: list[str] = []
@@ -91,8 +94,8 @@ def parse_summarizer_output(compressed: str) -> SummarizedNote:
         key, _, value = line.partition(":")
         key = key.strip().upper()
         value = value.strip()
-        if key == "CATEGORY" and value in config.VAULT_CATEGORIES:
-            category = value
+        if key == "CATEGORY" and value.lower() in category_lookup:
+            category = category_lookup[value.lower()]
         elif key == "FILENAME" and value:
             filename = value if value.endswith(".md") else f"{value}.md"
         elif key == "TAGS" and value:

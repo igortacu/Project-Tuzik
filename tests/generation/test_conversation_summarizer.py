@@ -87,3 +87,25 @@ def test_parse_summarizer_output_never_raises_on_empty_string():
     note = parse_summarizer_output("")
     assert note.category == "Misc"
     assert note.content == ""
+
+
+def test_parse_summarizer_output_tolerates_trailing_whitespace_on_separator():
+    compressed = "CATEGORY: Finance\nFILENAME: topic.md\n---  \ncontent"
+    note = parse_summarizer_output(compressed)
+    assert note.category == "Finance"
+    assert note.filename == "topic.md"
+    assert note.content == "content"
+
+
+def test_parse_summarizer_output_tolerates_crlf_line_endings():
+    compressed = "CATEGORY: Finance\r\nFILENAME: topic.md\r\n---\r\ncontent"
+    note = parse_summarizer_output(compressed)
+    assert note.category == "Finance"
+    assert note.filename == "topic.md"
+    assert note.content == "content"
+
+
+def test_parse_summarizer_output_matches_category_case_insensitively():
+    compressed = "CATEGORY: finance\nFILENAME: topic.md\n---\ncontent"
+    note = parse_summarizer_output(compressed)
+    assert note.category == "Finance"
