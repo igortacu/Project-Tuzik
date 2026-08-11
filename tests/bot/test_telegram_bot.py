@@ -88,11 +88,18 @@ def test_compress_and_save_chat_skips_when_nothing_to_save():
 
 
 def test_compress_and_save_chat_writes_when_something_to_save():
-    fake_path = Path("/vault/Murzik Notes/conversation_123.md")
+    fake_path = Path("/vault/Murzik Notes/People/igor.md")
+    summarizer_output = (
+        "CATEGORY: People\n"
+        "FILENAME: igor.md\n"
+        "TAGS: birthday\n"
+        "---\n"
+        "Igor's birthday is March 3rd."
+    )
     with (
         patch(
             "second_brain.bot.telegram_bot._summarizer_llm_client.generate",
-            return_value="Igor's birthday is March 3rd.",
+            return_value=summarizer_output,
         ),
         patch(
             "second_brain.bot.telegram_bot.vault_writer.append_note", return_value=fake_path
@@ -104,10 +111,9 @@ def test_compress_and_save_chat_writes_when_something_to_save():
             )
         )
 
-    mock_append.assert_called_once()
-    filename, content = mock_append.call_args.args
-    assert filename == "conversation_123.md"
-    assert "Igor's birthday is March 3rd." in content
+    mock_append.assert_called_once_with(
+        "People", "igor.md", "Igor's birthday is March 3rd.", ["birthday"]
+    )
 
 
 def test_periodic_save_job_skips_chats_with_nothing_buffered(tmp_path):

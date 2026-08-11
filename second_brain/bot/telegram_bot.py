@@ -27,6 +27,7 @@ from second_brain.generation.conversation_summarizer import (
     SUMMARIZER_SYSTEM_PROMPT,
     build_summarizer_prompt,
     is_nothing_to_save,
+    parse_summarizer_output,
 )
 from second_brain.generation.llm_client import LLMClient
 from second_brain.generation.speech_to_text import SpeechToTextError, transcribe_audio
@@ -304,11 +305,13 @@ async def _compress_and_save_chat(chat_id: int, turns: list[tuple[str, str]]) ->
         )
         return
 
-    filename = f"conversation_{chat_id}.md"
-    timestamp = datetime.now().strftime("%Y-%m-%d %H:%M")
-    content = f"## {timestamp}\n\n{compressed.strip()}"
-    path = await asyncio.to_thread(vault_writer.append_note, filename, content)
-    logger.info("Periodic save: wrote %d turns to %s", len(turns), path)
+    note = parse_summarizer_output(compressed)
+    path = await asyncio.to_thread(
+        vault_writer.append_note, note.category, note.filename, note.content, note.tags
+    )
+    logger.info(
+        "Periodic save: wrote %d turns to %s (category=%s)", len(turns), path, note.category
+    )
 
 
 async def periodic_save_job(context: ContextTypes.DEFAULT_TYPE) -> None:
