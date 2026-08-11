@@ -78,6 +78,11 @@ BM25_INDEX_PATH = "data/bm25_chunks.json"
 # for it to (mis)use. See second_brain/agent/vault_writer.py.
 MURZIK_NOTES_DIR = "Murzik Notes"
 
+# Fixed set of folders Murzik's own vault writes can land in -- extensible
+# by editing this list, never by the model inventing a new folder name on
+# the fly. See docs/superpowers/specs/2026-08-11-vault-structure-design.md.
+VAULT_CATEGORIES = ["People", "Finance", "Projects", "Life", "Misc"]
+
 # --- generation (consumed once generation/ is implemented) ---
 # Single OpenRouter model, no fallback model, no local model. A two-model
 # fallback was tried first, but OpenRouter rate limiting turned out to hit
